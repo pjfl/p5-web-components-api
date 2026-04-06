@@ -3,7 +3,7 @@ package Web::Components::API::Constants;
 use strictures;
 use parent 'Exporter::Tiny';
 
-use Class::Usul::Cmd::Constants qw( );
+use Web::ComposableRequest::Constants qw( );
 
 our @EXPORT = qw( API_META );
 
@@ -48,7 +48,7 @@ sub import {
    for (@EXPORT) { push @self, $_ if delete $usul_const->{$_} }
 
    $global_opts->{into} ||= caller;
-   Class::Usul::Cmd::Constants->import($global_opts, keys %{$usul_const});
+   Web::ComposableRequest::Constants->import($global_opts, keys %{$usul_const});
    $class->SUPER::import($global_opts, @self);
    return;
 }
@@ -73,7 +73,7 @@ None
 
 =over 3
 
-=item L<Class::Usul::Cmd::Constants>
+=item L<Web::ComposableRequest::Constants>
 
 =back
 

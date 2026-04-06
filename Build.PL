@@ -15,7 +15,6 @@ my $prereqs  = {
     'version' => '0.88'
   },
   'requires' => {
-    'Class::Usul::Cmd' => 'v0.1.20',
     'Data::Validation' => 'v0.28.7',
     'Exporter::Tiny' => '1.006000',
     'File::DataClass' => 'v0.73.11',
@@ -28,6 +27,7 @@ my $prereqs  = {
     'Type::Tiny' => '2.002001',
     'Unexpected' => 'v1.0.8',
     'Web::Components' => 'v0.13.48',
+    'Web::ComposableRequest' => 'v0.22.3',
     'namespace::autoclean' => '0.29',
     'perl' => '5.010001',
     'strictures' => '2.000006'

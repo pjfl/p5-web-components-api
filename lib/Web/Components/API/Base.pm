@@ -45,29 +45,43 @@ Defines the following attributes;
 
 has 'column_list' =>
    is      => 'lazy',
-   isa     => ArrayRef,
+   isa     => ArrayRef[class_type('Web::Components::API::Column')],
    default => sub {
       my $self = shift;
 
-      return [Web::Components::API::Column->new({
-         name        => 'page',
-         type        => 'int',
-         description => 'Page number',
-         location    => 'query',
-         methods     => { pagination => TRUE },
-      }), Web::Components::API::Column->new({
-         name        => 'page_size',
-         type        => 'int',
-         description => 'Page size',
-         location    => 'query',
-         methods     => { pagination => TRUE },
-      }), Web::Components::API::Column->new({
-         name        => 'sort_by',
-         type        => 'str',
-         description => 'Sort order',
-         location    => 'query',
-         methods     => { pagination => TRUE },
-      }), @{$self->_get_meta->column_list}];
+      return [
+         @{$self->_pagination_columns},
+         @{$self->_get_meta->column_list},
+      ];
+   };
+
+has '_pagination_columns' =>
+   is      => 'ro',
+   isa     => ArrayRef[class_type('Web::Components::API::Column')],
+   default => sub {
+      return [
+         Web::Components::API::Column->new({
+            name        => 'page',
+            type        => 'int',
+            description => 'Page number',
+            location    => 'query',
+            methods     => { pagination => TRUE },
+         }),
+         Web::Components::API::Column->new({
+            name        => 'page_size',
+            type        => 'int',
+            description => 'Page size',
+            location    => 'query',
+            methods     => { pagination => TRUE },
+         }),
+         Web::Components::API::Column->new({
+            name        => 'sort_by',
+            type        => 'str',
+            description => 'Sort order',
+            location    => 'query',
+            methods     => { pagination => TRUE },
+         }),
+      ];
    };
 
 =item max_page_size
@@ -121,19 +135,21 @@ Defines the following methods;
 
 =over 3
 
-=item arguments_pageing
+=item pagination_arguments
+
+Class method
 
 =cut
 
-sub arguments_pageing {
+sub pagination_arguments {
    return {
       name        => 'paging',
       type        => 'hash',
       description => q(
          Optional [% transport_type %] containing pagination options.
       ),
-      fields      => 'pagination',
       location    => 'query',
+      fields      => 'pagination',
    };
 }
 
@@ -291,34 +307,56 @@ sub _build_clause {
 sub _build_options {
    my ($self, $context, $params) = @_;
 
-   my $max_size = $self->max_page_size;
-   my $page     = $params->{page} // 1;
-   my $size     = $params->{page_size} // $max_size;
-   my $rv       = HTTP_UNPROCESSABLE_ENTITY;
-   my $order;
+   my $options = {};
+
+   for my $col_name (map { $_->name } @{$self->_pagination_columns}) {
+      my $build_method = "_build_options_${col_name}";
+
+      $options = { %{$options}, %{$self->$build_method($params)}, };
+   }
+
+   return $options;
+}
+
+sub _build_options_page {
+   my ($self, $params) = @_;
+
+   my $page = $params->{page} // 1;
+   my $rv   = HTTP_UNPROCESSABLE_ENTITY;
 
    throw 'Argument [_1] invalid', args => ['page'], rv => $rv
       unless $page =~ m{ \A [0-9]+ \z }mx && $page > 0;
 
+   return { page => $page };
+}
+
+sub _build_options_page_size {
+   my ($self, $params) = @_;
+
+   my $max_size = $self->max_page_size;
+   my $size     = $params->{page_size} // $max_size;
+   my $rv       = HTTP_UNPROCESSABLE_ENTITY;
+
    throw 'Argument [_1] invalid', args => ['page_size'], rv => $rv
       unless $size =~ m{ \A [0-9]+ \z }mx && $size >= 1 && $size <= $max_size;
 
-   if ($params->{sort_by}) {
-      my ($column, $dirn) = split m{ [ ] }mx, $params->{sort_by};
+   return { rows => $size };
+}
 
-      $dirn = 'asc' unless $dirn;
+sub _build_options_sort_by {
+   my ($self, $params) = @_;
 
-      throw 'Argument [_1] invalid', args => ['sort_by'], rv => $rv
-         unless $column && $dirn =~ m{ \A (asc)|(desc) \z }imx;
+   return {} unless $params->{sort_by};
 
-      $order = { "-${dirn}" => "me.${column}" };
-   }
+   my ($column, $dirn) = split m{ [ ] }mx, $params->{sort_by};
+   my $rv              = HTTP_UNPROCESSABLE_ENTITY;
 
-   my $options = { page => $page, rows => $size };
+   $dirn = 'asc' unless $dirn;
 
-   $options->{order_by} = $order if $order;
+   throw 'Argument [_1] invalid', args => ['sort_by'], rv => $rv
+      unless $column && $dirn =~ m{ \A (asc)|(desc) \z }imx;
 
-   return $options;
+   return { order_by => { "-${dirn}" => "me.${column}" } };
 }
 
 sub _build_where {
