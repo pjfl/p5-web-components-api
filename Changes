@@ -1,5 +1,6 @@
 Revision history for Web::Components::API
 
+          - Started adding POD
           - Imported code
 
 0.1.1     2026-04-05 23:42:38

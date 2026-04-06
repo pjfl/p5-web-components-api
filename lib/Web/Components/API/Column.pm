@@ -12,6 +12,32 @@ my $locations = Enum[qw(body path query)];
 my $types     = Enum[qw(array array_of_hash array_of_int bool datetime dbl
                         hash hash/array_of_hash int int/str str )];
 
+=pod
+
+=encoding utf-8
+
+=head1 Name
+
+Web::Components::API::Column - Defines the attributes for an API column
+
+=head1 Synopsis
+
+   use Web::Components::API::Column;
+
+=head1 Description
+
+Defines the attributes for an API column
+
+=head1 Configuration and Environment
+
+Defines the following attributes;
+
+=over 3
+
+=item constraints
+
+=cut
+
 has 'constraints' =>
    is          => 'ro',
    isa         => Dict[
@@ -22,6 +48,24 @@ has 'constraints' =>
    handles_via => 'Hash',
    handles     => { has_constraints => 'count' },
    default     => sub { {} };
+
+=item constraints_display
+
+=cut
+
+has 'constraints_display' =>
+   is      => 'lazy',
+   isa     => Str,
+   default => sub {
+      my $self    = shift;
+      my $actions = $self->constraints->{actions} or return 'None';
+
+      return $actions->{validate} ? $actions->{validate} : 'None';
+   };
+
+=item description
+
+=cut
 
 has 'description' =>
    is        => 'lazy',
@@ -42,22 +86,43 @@ has '_description' =>
    init_arg => 'description',
    default  => 'Undocumented';
 
+=item getter
+
+=cut
+
 has 'getter' => is => 'ro', isa => CodeRef, predicate => TRUE;
+
+=item location
+
+=cut
 
 has 'location' => is => 'ro', isa => $locations, default => 'query';
 
+=item name
+
+=cut
+
 has 'name' => is => 'ro', isa => NonEmptySimpleStr, required => TRUE;
+
+=item methods
+
+=cut
 
 has 'methods' => is => 'ro', isa => HashRef[Bool], default => sub { {} };
 
+=item type
+
+=cut
+
 has 'type' => is => 'ro', isa => $types, required => TRUE;
 
-sub constraints_display {
-   my $self    = shift;
-   my $actions = $self->constraints->{actions} or return 'None';
+=back
 
-   return $actions->{validate} ? $actions->{validate} : 'None';
-}
+=head1 Subroutines/Methods
+
+Defines no methods
+
+=cut
 
 use namespace::autoclean;
 
@@ -65,39 +130,15 @@ use namespace::autoclean;
 
 __END__
 
-=pod
-
-=encoding utf-8
-
-=head1 Name
-
-Web::Components::API::Column - One-line description of the modules purpose
-
-
-=head1 Synopsis
-
-   use Web::Components::API::Column;
-   # Brief but working code examples
-
-=head1 Description
-
-=head1 Configuration and Environment
-
-Defines the following attributes;
-
-=over 3
-
-=back
-
-=head1 Subroutines/Methods
-
 =head1 Diagnostics
+
+None
 
 =head1 Dependencies
 
 =over 3
 
-=item L<Class::Usul::Cmd>
+=item L<Web::Components>
 
 =back
 

@@ -13,9 +13,43 @@ use Moo;
 my $http_methods = Enum[qw( GET PUT POST DELETE )];
 my $http_status  = Int->where( defined status_message($_) );
 
+=pod
+
+=encoding utf-8
+
+=head1 Name
+
+Web::Components::API::Method - Defines the attributes for an API method
+
+=head1 Synopsis
+
+   use Web::Components::API::Method;
+
+=head1 Description
+
+Defines the attributes for an API method
+
+=head1 Configuration and Environment
+
+Defines the following attributes;
+
+=over 3
+
+=item access
+
+=cut
+
 has 'access' => is => 'ro', isa => Str, required => TRUE;
 
+=item action
+
+=cut
+
 has 'action' => is => 'ro', isa => Str, required => TRUE;
+
+=item additionally
+
+=cut
 
 has 'additionally' =>
    is  => 'ro',
@@ -24,6 +58,10 @@ has 'additionally' =>
       content_raw => Optional[Str],
       title       => Optional[Str],
    ]];
+
+=item description
+
+=cut
 
 has 'description' =>
    is        => 'lazy',
@@ -44,6 +82,10 @@ has '_description' =>
    init_arg => 'description',
    default  => 'Undocumented';
 
+=item examples
+
+=cut
+
 has 'examples' =>
    is      => 'ro',
    isa     => ArrayRef[
@@ -56,6 +98,10 @@ has 'examples' =>
       ]]
    ],
    default => sub { [] };
+
+=item in_args
+
+=cut
 
 has 'in_args' =>
    is       => 'lazy',
@@ -73,11 +119,27 @@ has '_in_args' =>
    init_arg => 'in_args',
    default  => sub { [] };
 
+=item message
+
+=cut
+
 has 'message' => is => 'ro', isa => Str, default => NUL;
+
+=item method
+
+=cut
 
 has 'method' => is => 'ro', isa => $http_methods, default => 'GET';
 
+=item name
+
+=cut
+
 has 'name' => is => 'ro', isa => NonEmptySimpleStr, required => TRUE;
+
+=item out_arg
+
+=cut
 
 has 'out_arg' =>
    is       => 'lazy',
@@ -94,14 +156,68 @@ has '_out_arg' =>
    isa      => Maybe[HashRef],
    init_arg => 'out_arg';
 
-has 'route'  => is => 'ro', isa => NonEmptySimpleStr, required => TRUE;
+=item route
+
+=cut
+
+has 'route' => is => 'ro', isa => NonEmptySimpleStr, required => TRUE;
+
+=item route_display
+
+=cut
+
+has 'route_display' =>
+   is      => 'lazy',
+   isa     => Str,
+   default => sub {
+      my $self = shift;
+
+      (my $route = $self->route) =~ s{ \{ (\w+) : [^\}]* \} }{:$1}gmx;
+
+      return $route;
+   };
+
+=item route_match
+
+=cut
+
+has 'route_match' =>
+   is      => 'lazy',
+   isa     => Str,
+   default => sub {
+      my $self = shift;
+
+      (my $route = $self->route) =~ s{ \{[^\}]+\} }{\*}gmx;
+
+      return $route;
+   };
+
+=item success_code
+
+=cut
 
 has 'success_code' => is => 'ro', isa => $http_status, default => HTTP_OK;
+
+=item success_message
+
+=cut
 
 has 'success_message' =>
    is      => 'lazy',
    isa     => Str,
    default => sub { status_message(shift->success_code) };
+
+=back
+
+=head1 Subroutines/Methods
+
+Defines the following methods;
+
+=over 3
+
+=item BUILD
+
+=cut
 
 sub BUILD {
    my $self = shift;
@@ -110,6 +226,10 @@ sub BUILD {
    $self->out_arg;
    return;
 }
+
+=item has_in_args
+
+=cut
 
 sub has_in_args {
    my ($self, $location) = @_;
@@ -121,61 +241,23 @@ sub has_in_args {
    return FALSE;
 }
 
-sub route_display {
-   my $self = shift;
-
-   (my $route = $self->route) =~ s{ \{ (\w+) : [^\}]* \} }{:$1}gmx;
-
-   return $route;
-}
-
-sub route_match {
-   my $self = shift;
-
-   (my $route = $self->route) =~ s{ \{[^\}]+\} }{\*}gmx;
-
-   return $route;
-}
-
 use namespace::autoclean;
 
 1;
 
 __END__
 
-=pod
-
-=encoding utf-8
-
-=head1 Name
-
-Web::Components::API::Method - One-line description of the modules purpose
-
-
-=head1 Synopsis
-
-   use Web::Components::API::Method;
-   # Brief but working code examples
-
-=head1 Description
-
-=head1 Configuration and Environment
-
-Defines the following attributes;
-
-=over 3
-
 =back
 
-=head1 Subroutines/Methods
-
 =head1 Diagnostics
+
+None
 
 =head1 Dependencies
 
 =over 3
 
-=item L<Class::Usul::Cmd>
+=item L<HTTP::Status>
 
 =back
 

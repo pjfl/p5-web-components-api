@@ -1,7 +1,7 @@
 package Web::Components::API;
 
 use 5.010001;
-use version; our $VERSION = qv( sprintf '0.1.%d', q$Rev: 2 $ =~ /\d+/gmx );
+use version; our $VERSION = qv( sprintf '0.1.%d', q$Rev: 3 $ =~ /\d+/gmx );
 
 use Web::Components::API::Constants
                            qw( EXCEPTION_CLASS FALSE NUL TRUE );
@@ -26,19 +26,70 @@ use Moo;
 # Context requires: authenticate find_user is_authorised
 # request session stash
 
+=pod
+
+=encoding utf-8
+
+=head1 Name
+
+Web::Components::API - REST API for Web::Components applications
+
+=head1 Synopsis
+
+   use Web::Components::API;
+
+=head1 Description
+
+REST API for Web::Components applications
+
+=head1 Configuration and Environment
+
+Defines the following attributes;
+
+=over 3
+
+=item access_token_lifetime
+
+=cut
+
 has 'access_token_lifetime' =>
    is      => 'lazy',
    isa     => Int,
    default => sub { shift->api_config->{access_token_lifetime} // 7_200 };
 
+=item api_config
+
+=cut
+
 has 'api_config' => is => 'ro', isa => HashRef, default => sub { {} };
 
-has 'dispatch_prefix' => is => 'ro', isa => Str, default => 'rest/dispatch';
+=item config
+
+=cut
+
+has 'config' => is => 'ro', required => TRUE;
+
+=item dispatch_prefix
+
+=cut
+
+has 'dispatch_prefix' =>
+   is      => 'lazy',
+   isa     => Str,
+   default => sub { shift->api_config->{dispatch_prefix} // 'rest/dispatch' };
+
+=item entity_list
+
+=cut
 
 has 'entity_list' =>
    is      => 'lazy',
    isa     => ArrayRef,
    default => sub { [ sort keys %{shift->entities} ] };
+
+=item entities
+
+=cut
 
 has 'entities' =>
    is      => 'lazy',
@@ -54,47 +105,107 @@ has 'entities' =>
       return load_components 'API', $args;
    };
 
+=item json_parser
+
+=cut
+
 has 'json_parser' => is => 'ro', required => TRUE;
 
+=item log
+
+=cut
+
 has 'log' => is => 'ro', required => TRUE;
+
+=item max_page_size
+
+=cut
 
 has 'max_page_size' =>
    is      => 'lazy',
    isa     => Int,
    default => sub { shift->api_config->{max_page_size} // 250 };
 
+=item max_req_per_min
+
+=cut
+
 has 'max_req_per_min' =>
    is      => 'lazy',
    isa     => Int,
    default => sub { shift->api_config->{max_req_per_min} // 5 };
 
+=item redis_client
+
+=cut
+
 has 'redis_client' => is => 'ro', required => TRUE;
 
+=item request_history
+
+=cut
+
 has 'request_history' => is => 'ro', isa => HashRef, default => sub { {} };
+
+=item request_token_lifetime
+
+=cut
 
 has 'request_token_lifetime' =>
    is      => 'lazy',
    isa     => Int,
    default => sub { shift->api_config->{request_token_lifetime} // 180 };
 
+=item route_match_prefix
+
+=cut
+
 has 'route_match_prefix' => is => 'ro', isa => Str, default => '/*';
+
+=item route_prefix
+
+=cut
 
 has 'route_prefix' =>
    is      => 'lazy',
    isa     => Str,
    default => sub { 'rest/v' . shift->versions->[-1] };
 
+=item schema
+
+=cut
+
 has 'schema' => is => 'ro', required => TRUE;
+
+=item secret
+
+=cut
 
 has 'secret' =>
    is      => 'lazy',
    isa     => Str,
    default => sub { shift->api_config->{secret} // NUL };
 
+=item versions
+
+=cut
+
 has 'versions' =>
    is      => 'lazy',
    isa     => ArrayRef,
    default => sub { shift->api_config->{versions} // [1] };
+
+=back
+
+=head1 Subroutines/Methods
+
+Defines the following methods;
+
+=over 3
+
+=item access_token
+
+=cut
 
 sub access_token {
    my ($self, $context) = @_;
@@ -116,6 +227,10 @@ sub access_token {
 
    return [HTTP_OK, { access_token => $self->_create_access_token($user) }];
 }
+
+=item authorise
+
+=cut
 
 sub authorise {
    my ($self, $context) = @_;
@@ -144,6 +259,10 @@ sub authorise {
 
    return $result;
 }
+
+=item dispatch
+
+=cut
 
 sub dispatch {
    my ($self, $context, @args) = @_;
@@ -178,6 +297,10 @@ sub dispatch {
    return $result;
 }
 
+=item get_entity
+
+=cut
+
 sub get_entity {
    my ($self, $moniker) = @_;
 
@@ -185,6 +308,10 @@ sub get_entity {
 
    return $self->entities->{$moniker};
 }
+
+=item refresh
+
+=cut
 
 sub refresh {
    my ($self, $context) = @_;
@@ -197,6 +324,10 @@ sub refresh {
 
    return [HTTP_OK, { access_token => $self->_encode_access_token($claim) }];
 }
+
+=item routes
+
+=cut
 
 sub routes {
    my $self   = shift;
@@ -349,9 +480,6 @@ sub _versioned_method {
 
    return $action if $wanted == $current;
 
-   throw "Version ${version} unknown", rv => HTTP_BAD_REQUEST
-      if $wanted > $current;
-
    for my $candidate (@{$self->versions}) {
       next if $candidate < $wanted;
 
@@ -369,38 +497,17 @@ use namespace::autoclean;
 
 __END__
 
-=pod
-
-=encoding utf-8
-
-=head1 Name
-
-Web::Components::API - One-line description of the modules purpose
-
-=head1 Synopsis
-
-   use Web::Components::API;
-   # Brief but working code examples
-
-=head1 Description
-
-=head1 Configuration and Environment
-
-Defines the following attributes;
-
-=over 3
-
 =back
 
-=head1 Subroutines/Methods
-
 =head1 Diagnostics
+
+None
 
 =head1 Dependencies
 
 =over 3
 
-=item L<Class::Usul::Cmd>
+=item L<Wev::Components>
 
 =back
 

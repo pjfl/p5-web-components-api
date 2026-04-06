@@ -5,6 +5,37 @@ use parent 'Exporter::Tiny';
 
 our @EXPORT = qw( API_META );
 
+=pod
+
+=encoding utf-8
+
+=head1 Name
+
+Web::Components::API::Constants - Exports the constants used in the distribution
+
+
+=head1 Synopsis
+
+   use Web::Components::API::Constants qw( API_META );
+
+=head1 Description
+
+Exports the constants used in the distribution
+
+=head1 Configuration and Environment
+
+Defines no attributes
+
+=head1 Subroutines/Methods
+
+Defines the following exported functions;
+
+=over 3
+
+=item import
+
+=cut
+
 sub import {
    my $class       = shift;
    my $global_opts = { $_[0] && ref $_[0] eq 'HASH' ? %{+ shift } : () };
@@ -20,45 +51,27 @@ sub import {
    return;
 }
 
+=item API_META
+
+=cut
+
 sub API_META () { '_api_meta_' }
 
 1;
 
 __END__
 
-=pod
-
-=encoding utf-8
-
-=head1 Name
-
-Web::Components::API::Constants - One-line description of the modules purpose
-
-
-=head1 Synopsis
-
-   use Web::Components::API::Constants;
-   # Brief but working code examples
-
-=head1 Description
-
-=head1 Configuration and Environment
-
-Defines the following attributes;
-
-=over 3
-
 =back
 
-=head1 Subroutines/Methods
-
 =head1 Diagnostics
+
+None
 
 =head1 Dependencies
 
 =over 3
 
-=item L<Class::Usul::Cmd>
+=item L<Class::Usul::Cmd::Constants>
 
 =back
 

@@ -15,6 +15,34 @@ use Data::Validation;
 use Web::Components::API::Column;
 use Moo;
 
+=pod
+
+=encoding utf-8
+
+=head1 Name
+
+Web::Components::API::Base - Base class for exposed entities
+
+=head1 Synopsis
+
+   use Moo;
+
+   extends 'Web::Components::API::Base';
+
+=head1 Description
+
+Base class for exposed entities
+
+=head1 Configuration and Environment
+
+Defines the following attributes;
+
+=over 3
+
+=item column_list
+
+=cut
+
 has 'column_list' =>
    is      => 'lazy',
    isa     => ArrayRef,
@@ -42,19 +70,39 @@ has 'column_list' =>
       }), @{$self->_get_meta->column_list}];
    };
 
+=item max_page_size
+
+=cut
+
 has 'max_page_size' => is => 'ro', isa => Int, default => 250;
+
+=item method_list
+
+=cut
 
 has 'method_list' =>
    is      => 'lazy',
    isa     => ArrayRef,
    default => sub { shift->_get_meta->method_list };
 
+=item schema
+
+=cut
+
 has 'schema' =>
    is       => 'ro',
    isa      => class_type('DBIx::Class::Schema'),
    required => TRUE;
 
+=item result_class
+
+=cut
+
 has 'result_class' => is => 'ro', isa => Str, required => TRUE;
+
+=item resultset
+
+=cut
 
 has 'resultset' =>
    is      => 'lazy',
@@ -64,6 +112,18 @@ has 'resultset' =>
 
       return $self->schema->resultset($self->result_class);
    };
+
+=back
+
+=head1 Subroutines/Methods
+
+Defines the following methods;
+
+=over 3
+
+=item arguments_pageing
+
+=cut
 
 sub arguments_pageing {
    return {
@@ -76,6 +136,10 @@ sub arguments_pageing {
       location    => 'query',
    };
 }
+
+=item create
+
+=cut
 
 sub create {
    my ($self, $context) = @_;
@@ -98,6 +162,10 @@ sub create {
    return $result;
 }
 
+=item delete
+
+=cut
+
 sub delete {
    my ($self, $context, @args) = @_;
 
@@ -111,6 +179,10 @@ sub delete {
    return [$self->_success_code('delete'), {}, $id];
 }
 
+=item get
+
+=cut
+
 sub get {
    my ($self, $context, @args) = @_;
 
@@ -121,6 +193,10 @@ sub get {
 
    return [$self->_success_code('get'), $self->_serialise('get', $result)];
 }
+
+=item search
+
+=cut
 
 sub search {
    my ($self, $context) = @_;
@@ -135,6 +211,10 @@ sub search {
 
    return [$code, $self->_serialise('search', $rs)];
 }
+
+=item update
+
+=cut
 
 sub update {
    my ($self, $context, @args) = @_;
@@ -155,6 +235,10 @@ sub update {
    return $result;
 }
 
+=item fields
+
+=cut
+
 sub fields {
    my ($self, $object) = @_;
 
@@ -167,6 +251,10 @@ sub fields {
 
    return \@columns;
 }
+
+=item get_message
+
+=cut
 
 sub get_message {
    my ($self, $method_name, $id) = @_;
@@ -492,39 +580,17 @@ use namespace::autoclean;
 
 __END__
 
-=pod
-
-=encoding utf-8
-
-=head1 Name
-
-Web::Components::API::Base - One-line description of the modules purpose
-
-
-=head1 Synopsis
-
-   use Web::Components::API::Base;
-   # Brief but working code examples
-
-=head1 Description
-
-=head1 Configuration and Environment
-
-Defines the following attributes;
-
-=over 3
-
 =back
 
-=head1 Subroutines/Methods
-
 =head1 Diagnostics
+
+None
 
 =head1 Dependencies
 
 =over 3
 
-=item L<Class::Usul::Cmd>
+=item L<Web::Components>
 
 =back
 
