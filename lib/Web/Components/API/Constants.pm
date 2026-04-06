@@ -3,6 +3,8 @@ package Web::Components::API::Constants;
 use strictures;
 use parent 'Exporter::Tiny';
 
+use Class::Usul::Cmd::Constants qw( );
+
 our @EXPORT = qw( API_META );
 
 =pod

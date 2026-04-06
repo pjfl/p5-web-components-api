@@ -11,7 +11,7 @@ use Web::Components::API::Description;
 use Moo;
 
 my $http_methods = Enum[qw( GET PUT POST DELETE )];
-my $http_status  = Int->where( defined status_message($_) );
+my $http_status  = Int->where( defined status_message($_ // 0) );
 
 =pod
 
@@ -60,6 +60,10 @@ has 'additionally' =>
    ]];
 
 =item description
+
+=item has_description
+
+Predicate
 
 =cut
 

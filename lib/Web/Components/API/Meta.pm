@@ -4,6 +4,32 @@ use Unexpected::Types qw( ArrayRef );
 use Moo;
 use MooX::HandlesVia;
 
+=pod
+
+=encoding utf-8
+
+=head1 Name
+
+Web::Components::API::Meta - Meta class
+
+=head1 Synopsis
+
+   use Web::Components::API::Meta;
+
+=head1 Description
+
+Meta class
+
+=head1 Configuration and Environment
+
+Defines the following attributes;
+
+=over 3
+
+=item column_list
+
+=cut
+
 has 'column_list' =>
    is            => 'rw',
    isa           => ArrayRef,
@@ -14,6 +40,10 @@ has 'column_list' =>
       clear_column_list  => 'clear',
       has_column_list    => 'count',
    };
+
+=item method_list
+
+=cut
 
 has 'method_list' =>
    is            => 'rw',
@@ -26,45 +56,33 @@ has 'method_list' =>
       has_method_list    => 'count',
    };
 
+=back
+
+=head1 Subroutines/Methods
+
+Defines no methods
+
+=over 3
+
+=cut
+
 use namespace::autoclean;
 
 1;
 
 __END__
 
-=pod
-
-=encoding utf-8
-
-=head1 Name
-
-Web::Components::API::Meta - One-line description of the modules purpose
-
-
-=head1 Synopsis
-
-   use Web::Components::API::Meta;
-   # Brief but working code examples
-
-=head1 Description
-
-=head1 Configuration and Environment
-
-Defines the following attributes;
-
-=over 3
-
 =back
 
-=head1 Subroutines/Methods
-
 =head1 Diagnostics
+
+None
 
 =head1 Dependencies
 
 =over 3
 
-=item L<Class::Usul::Cmd>
+=item L<Unexpected>
 
 =back
 

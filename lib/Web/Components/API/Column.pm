@@ -65,6 +65,10 @@ has 'constraints_display' =>
 
 =item description
 
+=item has_description
+
+Predicate
+
 =cut
 
 has 'description' =>
@@ -87,6 +91,10 @@ has '_description' =>
    default  => 'Undocumented';
 
 =item getter
+
+=item has_getter
+
+Predicate
 
 =cut
 

@@ -10,6 +10,36 @@ my $locations = Enum[qw(body path query)];
 my $types     = Enum[qw(array array_of_hash array_of_int bool datetime dbl
                         hash hash/array_of_hash int int/str str )];
 
+=pod
+
+=encoding utf-8
+
+=head1 Name
+
+Web::Components::API::Argument - Defines an API argument
+
+=head1 Synopsis
+
+   use Web::Components::API::Argument;
+
+=head1 Description
+
+Defines an API argument
+
+=head1 Configuration and Environment
+
+Defines the following attributes;
+
+=over 3
+
+=item description
+
+=item has_description
+
+Predicate
+
+=cut
+
 has 'description' =>
    is        => 'lazy',
    isa       => Str,
@@ -29,13 +59,43 @@ has '_description' =>
    init_arg => 'description',
    default  => 'Undocumented';
 
+=item location
+
+=cut
+
 has 'location' => is => 'ro', isa => $locations, default => 'query';
+
+=item name
+
+=cut
 
 has 'name' => is => 'ro', isa => NonEmptySimpleStr, required => TRUE;
 
+=item fields
+
+=item has_fields
+
+Predicate
+
+=cut
+
 has 'fields' => is => 'ro', isa => Str, predicate => TRUE;
 
+=item type
+
+=cut
+
 has 'type' => is => 'ro', isa => $types, required => TRUE;
+
+=back
+
+=head1 Subroutines/Methods
+
+Defines no methods
+
+=over 3
+
+=cut
 
 use namespace::autoclean;
 
@@ -43,39 +103,17 @@ use namespace::autoclean;
 
 __END__
 
-=pod
-
-=encoding utf-8
-
-=head1 Name
-
-Web::Components::API::Argument - One-line description of the modules purpose
-
-
-=head1 Synopsis
-
-   use Web::Components::API::Argument;
-   # Brief but working code examples
-
-=head1 Description
-
-=head1 Configuration and Environment
-
-Defines the following attributes;
-
-=over 3
-
 =back
 
-=head1 Subroutines/Methods
-
 =head1 Diagnostics
+
+None
 
 =head1 Dependencies
 
 =over 3
 
-=item L<Class::Usul::Cmd>
+=item L<Unexpected>
 
 =back
 

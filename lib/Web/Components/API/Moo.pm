@@ -17,6 +17,34 @@ my @banished_keywords = ( API_META );
 my @block_attributes  = qw();
 my @page_attributes   = qw();
 
+=pod
+
+=encoding utf-8
+
+=head1 Name
+
+Web::Components::API::Moo - Meta class importer
+
+=head1 Synopsis
+
+   use Web::Components::API::Moo;
+
+=head1 Description
+
+Meta class importer
+
+=head1 Configuration and Environment
+
+Defines no attributes
+
+=head1 Subroutines/Methods
+
+=over 3
+
+=item import
+
+=cut
+
 sub import {
    my ($class, @args) = @_;
 
@@ -107,39 +135,17 @@ use namespace::autoclean;
 
 __END__
 
-=pod
-
-=encoding utf-8
-
-=head1 Name
-
-Web::Components::API::Moo - One-line description of the modules purpose
-
-
-=head1 Synopsis
-
-   use Web::Components::API::Moo;
-   # Brief but working code examples
-
-=head1 Description
-
-=head1 Configuration and Environment
-
-Defines the following attributes;
-
-=over 3
-
 =back
 
-=head1 Subroutines/Methods
-
 =head1 Diagnostics
+
+None
 
 =head1 Dependencies
 
 =over 3
 
-=item L<Class::Usul::Cmd>
+=item L<Sub::Install>
 
 =back
 

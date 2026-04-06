@@ -1,5 +1,6 @@
 Revision history for Web::Components::API
 
+          - Completed POd boilerplate
           - Started adding POD
           - Imported code
 

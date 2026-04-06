@@ -1,25 +1,56 @@
 # Name
 
-Web::Components::API - One-line description of the modules purpose
+Web::Components::API - REST API for Web::Components applications
 
 # Synopsis
 
     use Web::Components::API;
-    # Brief but working code examples
 
 # Description
+
+REST API for Web::Components applications
 
 # Configuration and Environment
 
 Defines the following attributes;
 
+- access\_token\_lifetime
+- api\_config
+- config
+- dispatch\_prefix
+- entity\_list
+- entities
+- json\_parser
+- log
+- max\_page\_size
+- max\_req\_per\_min
+- redis\_client
+- request\_history
+- request\_token\_lifetime
+- route\_match\_prefix
+- route\_prefix
+- schema
+- secret
+- versions
+
 # Subroutines/Methods
+
+Defines the following methods;
+
+- access\_token
+- authorise
+- dispatch
+- get\_entity
+- refresh
+- routes
 
 # Diagnostics
 
+None
+
 # Dependencies
 
-- [Class::Usul::Cmd](https://metacpan.org/pod/Class%3A%3AUsul%3A%3ACmd)
+- [Web::Components](https://metacpan.org/pod/Web%3A%3AComponents)
 
 # Incompatibilities
 
