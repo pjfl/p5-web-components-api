@@ -8,7 +8,7 @@ use English               qw( -no_match_vars );
 use File::DataClass::IO   qw( io );
 use Unexpected::Functions qw( throw );
 
-our @EXPORT = qw( create_token digest json_bool );
+our @EXPORT = qw( create_token digest json_bool urandom );
 
 =pod
 
@@ -32,13 +32,15 @@ Defines no attributes
 
 =head1 Subroutines/Methods
 
-Defines the following functions;
+Exports the following functions;
 
 =over 3
 
-=item create_token
+=item C<create_token>
 
    $token = create_token;
+
+Returns thirty two bytes of our very best random hexadecimal characters
 
 =cut
 
@@ -46,9 +48,12 @@ sub create_token () {
    return substr digest(urandom())->hexdigest, 0, 32;
 }
 
-=item digest
+=item C<digest>
 
    $digest = digest $seed;
+
+Return an instance of the best L<Digest> algorithmn available to which
+C<seed> has been added
 
 =cut
 
@@ -75,7 +80,7 @@ sub digest ($) {
    return $digest;
 }
 
-=item json_bool
+=item C<json_bool>
 
    $scalar_ref = json_bool $scalar;
 
@@ -88,9 +93,15 @@ sub json_bool ($) {
    return (shift) ? \1 : \0;
 }
 
-=item urandom
+=item C<urandom>
 
    $random_bytes = urandom $wanted?, $options?;
+
+Return random bytes. The optional C<wanted> defaults to sixty four characters,
+and the optional hash reference C<options> defaults empty. Specify
+C<options>.C<source> to set the path from which the random is read. If no
+filesystem source is available, fallback on some pseudo-random material
+instead
 
 =cut
 

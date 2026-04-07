@@ -41,7 +41,10 @@ Defines no attributes
 
 =over 3
 
-=item import
+=item C<import>
+
+Installs an instance of L<Web::Components::API::Meta> on the caller. Also
+exports by default the functions C<has_api_column> and C<has_api_method>
 
 =cut
 

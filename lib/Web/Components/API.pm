@@ -1,28 +1,26 @@
 package Web::Components::API;
 
 use 5.010001;
-use version; our $VERSION = qv( sprintf '0.1.%d', q$Rev: 5 $ =~ /\d+/gmx );
+use version; our $VERSION = qv( sprintf '0.1.%d', q$Rev: 6 $ =~ /\d+/gmx );
 
-use Web::Components::API::Constants qw( EXCEPTION_CLASS FALSE NUL TRUE );
-use HTTP::Status           qw( HTTP_BAD_REQUEST HTTP_CONFLICT HTTP_FORBIDDEN
-                               HTTP_INTERNAL_SERVER_ERROR HTTP_OK
-                               HTTP_TOO_MANY_REQUESTS HTTP_UNAUTHORIZED
-                               HTTP_UNPROCESSABLE_ENTITY
-                               is_error status_message );
-use Unexpected::Types      qw( ArrayRef HashRef Int Str );
-use List::Util             qw( first );
-use MIME::Base64           qw( decode_base64url encode_base64url );
-use Scalar::Util           qw( blessed );
-use Type::Utils            qw( class_type );
-use Unexpected::Functions  qw( throw );
+use Web::Components::API::Constants
+                          qw( EXCEPTION_CLASS FALSE NUL TRUE );
+use HTTP::Status          qw( HTTP_BAD_REQUEST HTTP_CONFLICT HTTP_FORBIDDEN
+                              HTTP_INTERNAL_SERVER_ERROR HTTP_OK
+                              HTTP_TOO_MANY_REQUESTS HTTP_UNAUTHORIZED
+                              HTTP_UNPROCESSABLE_ENTITY
+                              is_error status_message );
+use Unexpected::Types     qw( ArrayRef HashRef Int Str );
+use List::Util            qw( first );
+use MIME::Base64          qw( decode_base64url encode_base64url );
+use Scalar::Util          qw( blessed );
+use Type::Utils           qw( class_type );
+use Unexpected::Functions qw( throw );
 use Web::Components::API::Util
-                           qw( create_token digest );
-use Web::Components::Util  qw( load_components );
+                          qw( create_token digest );
+use Web::Components::Util qw( load_components );
 use Try::Tiny;
 use Moo;
-
-# Context requires: authenticate find_user is_authorised
-# request session stash
 
 =pod
 
@@ -34,11 +32,49 @@ Web::Components::API - REST API for Web::Components applications
 
 =head1 Synopsis
 
+   package MyApp::Controller::REST;
+
+   use Web::Components::Util qw( build_routes );
    use Web::Components::API;
+   use Web::Simple;
+
+   with 'Web::Components::Role';
+   with 'Web::Components::ReverseMap';
+
+   has '+moniker' => default => 'rest';
+
+   has 'api' =>
+      is      => 'lazy',
+      default => sub {
+         my $self = shift;
+         my $args = {
+            api_config   => $self->api_config,
+            config       => $self->config,
+            json_parser  => $self->json_parser,
+            log          => $self->log,
+            redis_client => $self->redis_client,
+            schema       => $self->schema,
+         };
+
+         return Web::Components::API->new($args);
+      };
+
+   has 'api_config' => is => 'lazy', default => sub { {} };
+
+   sub dispatch_request { build_routes
+      'POST + /authorise + ?*'    => 'rest/authorise',
+      'POST + /access_token + ?*' => 'rest/access_token',
+      'POST + /refresh + ?*'      => 'rest/refresh',
+      shift->api->routes,
+   }
 
 =head1 Description
 
-REST API for Web::Components applications
+REST API for L<Web::Components> applications
+
+The example above does not define the attributes used to instantiate the
+L<Web::Components::API> object. A model with a C<moniker> of C<rest> is
+also required. This should proxy the methods provided by the API object
 
 =head1 Configuration and Environment
 
@@ -46,7 +82,10 @@ Defines the following attributes;
 
 =over 3
 
-=item access_token_lifetime
+=item C<access_token_lifetime>
+
+Length of time in seconds for which the access token is valid. Defaults
+to two hours
 
 =cut
 
@@ -55,19 +94,25 @@ has 'access_token_lifetime' =>
    isa     => Int,
    default => sub { shift->api_config->{access_token_lifetime} // 7_200 };
 
-=item api_config
+=item C<api_config>
+
+A hash reference of options used to provide defaults for other attributes
 
 =cut
 
 has 'api_config' => is => 'ro', isa => HashRef, default => sub { {} };
 
-=item config
+=item C<config>
+
+A required configuration object
 
 =cut
 
 has 'config' => is => 'ro', required => TRUE;
 
-=item dispatch_prefix
+=item C<dispatch_prefix>
+
+A string which defaults to C<rest/dispatch>. See the C<routes> method
 
 =cut
 
@@ -76,7 +121,9 @@ has 'dispatch_prefix' =>
    isa     => Str,
    default => sub { shift->api_config->{dispatch_prefix} // 'rest/dispatch' };
 
-=item entity_list
+=item C<entity_list>
+
+A sorted list of entity names
 
 =cut
 
@@ -85,7 +132,10 @@ has 'entity_list' =>
    isa     => ArrayRef,
    default => sub { [ sort keys %{shift->entities} ] };
 
-=item entities
+=item C<entities>
+
+An array of objects that inherit from L<Web::Components::API::Base>. These
+are loaded and instantiated from the classes found in the C<API> directory
 
 =cut
 
@@ -103,19 +153,25 @@ has 'entities' =>
       return load_components 'API', $args;
    };
 
-=item json_parser
+=item C<json_parser>
+
+A required JSON parsing object
 
 =cut
 
 has 'json_parser' => is => 'ro', required => TRUE;
 
-=item log
+=item C<log>
+
+A required logging object
 
 =cut
 
 has 'log' => is => 'ro', required => TRUE;
 
-=item max_page_size
+=item C<max_page_size>
+
+Maximum number of objects to return in a single API call. Defaults to 250
 
 =cut
 
@@ -124,7 +180,9 @@ has 'max_page_size' =>
    isa     => Int,
    default => sub { shift->api_config->{max_page_size} // 250 };
 
-=item max_req_per_min
+=item C<max_req_per_min>
+
+Maximum number of requests per minute. Used to throttle clients
 
 =cut
 
@@ -133,19 +191,18 @@ has 'max_req_per_min' =>
    isa     => Int,
    default => sub { shift->api_config->{max_req_per_min} // 5 };
 
-=item redis_client
+=item C<redis_client>
+
+A required L<Redis> client object
 
 =cut
 
 has 'redis_client' => is => 'ro', required => TRUE;
 
-=item request_history
+=item C<request_token_lifetime>
 
-=cut
-
-has 'request_history' => is => 'ro', isa => HashRef, default => sub { {} };
-
-=item request_token_lifetime
+Length of time in seconds that the request token will be valid. Defaults
+to three minutes
 
 =cut
 
@@ -154,13 +211,21 @@ has 'request_token_lifetime' =>
    isa     => Int,
    default => sub { shift->api_config->{request_token_lifetime} // 180 };
 
-=item route_match_prefix
+=item C<route_match_prefix>
+
+A string which defaults to C</*>. See the C<routes> method
 
 =cut
 
-has 'route_match_prefix' => is => 'ro', isa => Str, default => '/*';
+has 'route_match_prefix' =>
+   is      => 'ro',
+   isa     => Str,
+   default => sub { shift->api_config->{route_match_prefix} // '/*' };
 
-=item route_prefix
+=item C<route_prefix>
+
+A string used in the documentation output. Defaults to C<rest/v1> where
+the C<1> is the current API version number
 
 =cut
 
@@ -169,13 +234,17 @@ has 'route_prefix' =>
    isa     => Str,
    default => sub { 'rest/v' . shift->versions->[-1] };
 
-=item schema
+=item C<schema>
+
+A required instance of a L<DBIx::Class> schema object
 
 =cut
 
 has 'schema' => is => 'ro', required => TRUE;
 
-=item secret
+=item C<secret>
+
+A string used to create and verify access tokens
 
 =cut
 
@@ -184,7 +253,10 @@ has 'secret' =>
    isa     => Str,
    default => sub { shift->api_config->{secret} // NUL };
 
-=item versions
+=item C<versions>
+
+An array reference of version numbers currently supported. Defaults to
+C<[1]>
 
 =cut
 
@@ -192,6 +264,9 @@ has 'versions' =>
    is      => 'lazy',
    isa     => ArrayRef,
    default => sub { shift->api_config->{versions} // [1] };
+
+# Private attributes
+has '_request_history' => is => 'ro', isa => HashRef, default => sub { {} };
 
 =back
 
@@ -201,7 +276,14 @@ Defines the following methods;
 
 =over 3
 
-=item access_token
+=item C<access_token>
+
+   $tuple = $self->access_token($context);
+
+Exchanges a C<request_token> for an C<access_token>. The returned tuple
+contains an HTTP status code and a hash reference which forms the body of the
+response containing the token. Requires C<request_token> on
+C<context>.C<request>.C<body_parameters>
 
 =cut
 
@@ -226,7 +308,15 @@ sub access_token {
    return [HTTP_OK, { access_token => $self->_create_access_token($user) }];
 }
 
-=item authorise
+=item C<authorise>
+
+   $tuple = $self->authorise($context);
+
+Obtain a C<request_token>. The returned tuple contains an HTTP status code and
+a hash reference which forms the body of the response containing the
+token. Requires C<username> and C<password> on
+C<context>.C<request>.C<body_parameters>. Requires C<find_user> and
+C<authenticate> on C<context>
 
 =cut
 
@@ -258,7 +348,16 @@ sub authorise {
    return $result;
 }
 
-=item dispatch
+=item C<dispatch>
+
+   $tuple = $self->dispatch($context, @args);
+
+Obtains C<moniker/action> from C<context>.C<action>. Uses the C<moniker> to get
+the API entity and then calls C<action> on that object. Requires a valid
+C<access_token> on C<context>.C<request>.C<headers>.C<Authorization>. Requires
+C<is_authorised> on C<context>. The C<args> are the positional parameters from
+the request. The first argument should be the version from the request
+(defaults to v1)
 
 =cut
 
@@ -274,13 +373,10 @@ sub dispatch {
 
    return $result if is_error($result->[0]);
 
-   my $claim = $result->[1];
-
-   $self->_update_session($context, $claim);
+   $self->_update_session($context, $result->[1]);
 
    try {
-      my $chain  = $context->stash('method_chain');
-      my (undef, $moniker, $action) = split m{ / }mx, $chain;
+      my (undef, undef, $moniker, $action) = split m{ / }mx, $context->action;
       my $entity = $self->entities->{$moniker};
       my $method = $self->_versioned_method($entity, $action, $version);
 
@@ -295,7 +391,12 @@ sub dispatch {
    return $result;
 }
 
-=item get_entity
+=item C<get_entity>
+
+   $entity_object = $self->get_entity($moniker);
+
+All API entities must do L<Web::Components::Role> which gives them a unique
+attribute C<moniker>. Returns the entity object for the given C<moniker>
 
 =cut
 
@@ -307,7 +408,14 @@ sub get_entity {
    return $self->entities->{$moniker};
 }
 
-=item refresh
+=item C<refresh>
+
+   $tuple = $self->refresh($context);
+
+Obtains a fresh C<access_token>. The returned tuple
+contains an HTTP status code and a hash reference which forms the body of the
+response containing the token. Requires a valid C<access_token> on
+C<context>.C<request>.C<headers>.C<Authorization>
 
 =cut
 
@@ -318,12 +426,19 @@ sub refresh {
 
    return $result if is_error($result->[0]);
 
-   my $claim = $result->[1];
+   my $token = $self->_encode_access_token($result->[1]);
 
-   return [HTTP_OK, { access_token => $self->_encode_access_token($claim) }];
+   return [HTTP_OK, { access_token => $token }];
 }
 
-=item routes
+=item C<routes>
+
+   @routes = $self->routes;
+
+This should be called from within a L<Web::Simple> C<dispatch_request> method.
+Returns a list of pairs of strings. Each pair is a L<Web::Dispatch> route and
+C<moniker/method_chain> used by L<Web::Components> to implement chained
+dispatch
 
 =cut
 
@@ -352,9 +467,9 @@ sub routes {
 sub _create_access_token {
    my ($self, $user) = @_;
 
-   my $role = $user->role->name;
+   my $claim = { id => $user->id, role => $user->role->name };
 
-   return $self->_encode_access_token({ id => $user->id, role => $role });
+   return $self->_encode_access_token($claim);
 }
 
 sub _decode_access_token {
@@ -433,7 +548,7 @@ sub _is_throttled {
 
    my $default = { stamp => 0, count => 0 };
    my $address = $context->request->remote_address;
-   my $record  = $self->request_history->{$address} // $default;
+   my $record  = $self->_request_history->{$address} // $default;
    my $max_rpm = $self->max_req_per_min;
    my $message = "Maximum ${max_rpm} requests per minute";
    my $now     = time;
@@ -442,7 +557,7 @@ sub _is_throttled {
 
    $record = { stamp => $now, count => 1 } if $now - $record->{stamp} > 60;
 
-   $self->request_history->{$address} = $record;
+   $self->_request_history->{$address} = $record;
 
    return [HTTP_TOO_MANY_REQUESTS, { message => $message } ]
       if $record->{count} > $max_rpm;
@@ -461,12 +576,15 @@ sub _jwt_hash {
 sub _update_session {
    my ($self, $context, $claim) = @_;
 
+   $claim->{address}       = $context->request->remote_address;
+   $claim->{authenticated} = TRUE;
+
    my $session = $context->session;
 
-   $session->address($context->request->remote_address);
-   $session->authenticated(TRUE);
-   $session->id($claim->{id});
-   $session->role($claim->{role});
+   for my $key (keys %{$claim}) {
+      $session->$key($claim->{$key}) if $session->can($key);
+   }
+
    return;
 }
 

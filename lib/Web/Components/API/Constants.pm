@@ -5,7 +5,7 @@ use parent 'Exporter::Tiny';
 
 use Web::ComposableRequest::Constants qw( );
 
-our @EXPORT = qw( API_META );
+our @EXPORT = qw( API_META DATA_TYPES HTTP_METHODS LOCATIONS );
 
 =pod
 
@@ -30,11 +30,15 @@ Defines no attributes
 
 =head1 Subroutines/Methods
 
-Defines the following exported functions;
+Exports the following functions/constants;
 
 =over 3
 
-=item import
+=item C<import>
+
+Any requested subroutines not exported here are passed to
+L<Web::ComposableRequest::Constants>. If it does not export them an
+exception is raised
 
 =cut
 
@@ -53,11 +57,38 @@ sub import {
    return;
 }
 
-=item API_META
+=item C<API_META>
+
+Attribute used to store the meta object on the consuming class
 
 =cut
 
 sub API_META () { '_api_meta_' }
+
+=item C<DATA_TYPES>
+
+List of data types understood by the column/argument object
+
+=cut
+
+sub DATA_TYPES () { qw(array array_of_hash array_of_int bool datetime dbl
+                       hash hash/array_of_hash int int/str str ) }
+
+=item C<HTTP_METHODS>
+
+List of supported HTTP methods
+
+=cut
+
+sub HTTP_METHODS () { qw( GET PUT POST DELETE ) }
+
+=item C<LOCATIONS>
+
+List of locations for input parameters
+
+=cut
+
+sub LOCATIONS () { qw(body path query) }
 
 1;
 

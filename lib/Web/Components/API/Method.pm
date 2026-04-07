@@ -1,7 +1,7 @@
 package Web::Components::API::Method;
 
 use Web::Components::API::Constants
-                      qw( FALSE NUL TRUE );
+                      qw( FALSE HTTP_METHODS NUL TRUE );
 use HTTP::Status      qw( HTTP_OK status_message );
 use Unexpected::Types qw( ArrayRef Dict Enum HashRef Int Maybe
                           NonEmptySimpleStr Object Optional Str );
@@ -9,9 +9,6 @@ use Type::Utils       qw( class_type );
 use Web::Components::API::Argument;
 use Web::Components::API::Description;
 use Moo;
-
-my $http_methods = Enum[qw( GET PUT POST DELETE )];
-my $http_status  = Int->where( defined status_message($_ // 0) );
 
 =pod
 
@@ -35,19 +32,27 @@ Defines the following attributes;
 
 =over 3
 
-=item access
+=item C<access>
+
+A required string. This is presented to the C<context>.C<is_authorised> method
+to check of the user making the request has the required permission
 
 =cut
 
 has 'access' => is => 'ro', isa => Str, required => TRUE;
 
-=item action
+=item C<action>
+
+The name of the subroutine to call. Required
 
 =cut
 
 has 'action' => is => 'ro', isa => Str, required => TRUE;
 
-=item additionally
+=item C<additionally>
+
+An optional C<Dict> containing additional documentation displayed for this
+method
 
 =cut
 
@@ -59,9 +64,11 @@ has 'additionally' =>
       title       => Optional[Str],
    ]];
 
-=item description
+=item C<description>
 
-=item has_description
+A text description of this methods purpose
+
+=item C<has_description>
 
 Predicate
 
@@ -86,7 +93,10 @@ has '_description' =>
    init_arg => 'description',
    default  => 'Undocumented';
 
-=item examples
+=item C<examples>
+
+An array reference of optinal C<Dict> types. Defines the examples used in
+the documentation
 
 =cut
 
@@ -103,7 +113,10 @@ has 'examples' =>
    ],
    default => sub { [] };
 
-=item in_args
+=item C<in_args>
+
+An array reference of L<Web::Components::API::Argument> objects. It defines
+what this method call consumes by way of input from the request
 
 =cut
 
@@ -123,25 +136,34 @@ has '_in_args' =>
    init_arg => 'in_args',
    default  => sub { [] };
 
-=item message
+=item C<message>
+
+Upon successful completion of the method call, log this optional string
 
 =cut
 
 has 'message' => is => 'ro', isa => Str, default => NUL;
 
-=item method
+=item C<method>
+
+The HTTP method that this API method responds to. Defaults to C<GET>
 
 =cut
 
-has 'method' => is => 'ro', isa => $http_methods, default => 'GET';
+has 'method' => is => 'ro', isa => Enum[HTTP_METHODS], default => 'GET';
 
-=item name
+=item C<name>
+
+A required string. The name of this method
 
 =cut
 
 has 'name' => is => 'ro', isa => NonEmptySimpleStr, required => TRUE;
 
-=item out_arg
+=item C<out_arg>
+
+An instance of L<Web::Components::API::Argument>. It defines what will be
+returned by this method call
 
 =cut
 
@@ -160,13 +182,19 @@ has '_out_arg' =>
    isa      => Maybe[HashRef],
    init_arg => 'out_arg';
 
-=item route
+=item C<route>
+
+This is a required string. It is the partial path of this method in the
+request C<URI>
 
 =cut
 
 has 'route' => is => 'ro', isa => NonEmptySimpleStr, required => TRUE;
 
-=item route_display
+=item C<route_display>
+
+Turns the C<route> attribute value into one suitable for displaying in the
+documentation
 
 =cut
 
@@ -181,7 +209,10 @@ has 'route_display' =>
       return $route;
    };
 
-=item route_match
+=item C<route_match>
+
+Turns th C<route> attribute value into one suitable for a L<Web::Dispatch>
+route
 
 =cut
 
@@ -196,13 +227,20 @@ has 'route_match' =>
       return $route;
    };
 
-=item success_code
+=item C<success_code>
+
+Defaults to C<HTTP_OK>. The code returned upon successful completion of
+this method call
 
 =cut
 
+my $http_status = Int->where( defined status_message($_ // 0) );
+
 has 'success_code' => is => 'ro', isa => $http_status, default => HTTP_OK;
 
-=item success_message
+=item C<success_message>
+
+Returns the status message for the C<success_code>
 
 =cut
 
@@ -219,7 +257,9 @@ Defines the following methods;
 
 =over 3
 
-=item BUILD
+=item C<BUILD>
+
+Force the lazy C<in_args> and C<out_arg> to instantiate
 
 =cut
 
@@ -231,7 +271,11 @@ sub BUILD {
    return;
 }
 
-=item has_in_args
+=item C<has_in_args>
+
+Returns true if this methods C<in_args> has an
+L<Web::Components::API::Argument> whose C<location> attribute matches the one
+provided. Returns false otherwise
 
 =cut
 

@@ -25,13 +25,29 @@ Web::Components::API::Base - Base class for exposed entities
 
 =head1 Synopsis
 
+   package MyApp::API::MyEntity;
+
+   use Web::Components::API::Constants qw( API_META );
    use Moo;
+   use Web::Components::API::Moo;
 
    extends 'Web::Components::API::Base';
+   with    'Web::Components::Role';
+
+   has '+moniker' => default => 'myentity';
+
+   has '+result_class' => default => 'MyResultClass';
+
+   has_api_column 'column_name' => type => ...;
+
+   has_api_method 'method_name' => route => ...;
+
+   use namespace::autoclean -except => API_META;
 
 =head1 Description
 
-Base class for exposed entities
+Base class for exposed entities. All C<API> classes are expected to inherit
+from this
 
 =head1 Configuration and Environment
 
@@ -39,7 +55,17 @@ Defines the following attributes;
 
 =over 3
 
-=item column_list
+=item C<application>
+
+An immutable weak reference to the L<Web::Components::API> object. Required
+
+=cut
+
+has 'application' => is => 'ro', required => TRUE, weak_ref => TRUE;
+
+=item C<column_list>
+
+The list of L<Web::Components::API::Column> objects declared for this entity
 
 =cut
 
@@ -50,8 +76,24 @@ has 'column_list' =>
       my $self = shift;
 
       return [
+         @{$self->_content_columns},
          @{$self->_pagination_columns},
          @{$self->_get_meta->column_list},
+      ];
+   };
+
+has '_content_columns' =>
+   is      => 'ro',
+   isa     => ArrayRef[class_type('Web::Components::API::Column')],
+   default => sub {
+      return [
+         Web::Components::API::Column->new({
+            name        => 'prefetch',
+            type        => 'str',
+            description => 'Include related entities',
+            location    => 'query',
+            methods     => { content => TRUE },
+         }),
       ];
    };
 
@@ -84,13 +126,17 @@ has '_pagination_columns' =>
       ];
    };
 
-=item max_page_size
+=item C<max_page_size>
+
+Maximum number of objects to return in a single API call. Defaults to 250
 
 =cut
 
 has 'max_page_size' => is => 'ro', isa => Int, default => 250;
 
-=item method_list
+=item C<method_list>
+
+The list of L<Web::Components::API::Method> objects declared for this entity
 
 =cut
 
@@ -99,7 +145,9 @@ has 'method_list' =>
    isa     => ArrayRef,
    default => sub { shift->_get_meta->method_list };
 
-=item schema
+=item C<schema>
+
+A required instance of a L<DBIx::Class> schema object
 
 =cut
 
@@ -108,13 +156,18 @@ has 'schema' =>
    isa      => class_type('DBIx::Class::Schema'),
    required => TRUE;
 
-=item result_class
+=item C<result_class>
+
+Required L<DBIx::Class> result class name. See C<resultset>
 
 =cut
 
 has 'result_class' => is => 'ro', isa => Str, required => TRUE;
 
-=item resultset
+=item C<resultset>
+
+Derived from the C<schema> and C<result_class>. The C<resultset> object is
+expected to implement the method C<find_by_key>
 
 =cut
 
@@ -135,9 +188,29 @@ Defines the following methods;
 
 =over 3
 
-=item pagination_arguments
+=item C<content_arguments>
 
-Class method
+Class method. Add these to a methods C<in_args> to include the attributes
+that they define
+
+=cut
+
+sub content_arguments {
+   return {
+      name        => 'content',
+      type        => 'hash',
+      description => q(
+         Optional [% transport_type %] containing content fetching options.
+      ),
+      location    => 'query',
+      fields      => 'content',
+   }
+}
+
+=item C<pagination_arguments>
+
+Class method. Add these to a methods C<in_args> to include the attributes
+that they define
 
 =cut
 
@@ -153,7 +226,14 @@ sub pagination_arguments {
    };
 }
 
-=item create
+=item C<create>
+
+   $tuple = $self->create($context);
+
+Creates a new persisted L<DBIx::Class> result object. Expects
+C<context>.C<request>.C<body_parameters> to contains the attributes and
+values used to create to object. Returns a tuple containing HTTP status
+code, response body, and the id of the newly created object
 
 =cut
 
@@ -167,9 +247,9 @@ sub create {
 
    $self->_validate_constraints('create', $options);
 
-   my $result  = $self->resultset->create($options);
-   my $code    = $self->_success_code('create');
-   my $id      = $result->id;
+   my $result = $self->resultset->create($options);
+   my $code   = $self->_success_code('create');
+   my $id     = $result->id;
 
    $result->discard_changes;
    $result = $self->get($context, $id);
@@ -178,7 +258,13 @@ sub create {
    return $result;
 }
 
-=item delete
+=item C<delete>
+
+   $tuple = $self->delete($context, @args);
+
+Deletes a persisted object identified by the first of the C<args> passed.
+Returns a tuple containing an HTTP status code, an empty response body, and
+the id of the deleted object
 
 =cut
 
@@ -195,7 +281,13 @@ sub delete {
    return [$self->_success_code('delete'), {}, $id];
 }
 
-=item get
+=item C<get>
+
+   $tuple = $self->get($context, @args);
+
+Fetches a persisted object identified by the first of the C<args> passed.
+Returns a tuple containing an HTTP status code, and a response body
+containing the object attributes and values
 
 =cut
 
@@ -210,7 +302,12 @@ sub get {
    return [$self->_success_code('get'), $self->_serialise('get', $result)];
 }
 
-=item search
+=item C<search>
+
+   $tuple = $self->search($context);
+
+Returns an array of persisted object matching the search criteria which are
+extracted from the request query parameters
 
 =cut
 
@@ -223,12 +320,19 @@ sub search {
    my $where   = $self->_build_where($context, $params);
    my $options = $self->_build_options($context, $params);
    my $rs      = $self->resultset->search($where, $options);
-   my $code    = $self->_success_code('search');
+   my $body    = $self->_serialise('search', $rs, $options);
 
-   return [$code, $self->_serialise('search', $rs)];
+   return [$self->_success_code('search'), $body];
 }
 
-=item update
+=item C<update>
+
+   $tuple = $self->update($context, @args);
+
+Updates an existsing persisted object. The first of the C<args> is the id of
+the object being updated. Update parameters are taken from
+C<context>.C<request>.C<body_parameters>. Returns the same tuple as the
+C<get> method but adds the id of the updated object
 
 =cut
 
@@ -251,7 +355,12 @@ sub update {
    return $result;
 }
 
-=item fields
+=item C<fields>
+
+   $columns = $self->fields($object);
+
+Returns an array reference of column objects associated with the
+C<object>.C<fields> value. Used to display API documentation
 
 =cut
 
@@ -262,13 +371,21 @@ sub fields {
    my @columns;
 
    for my $column (@{$self->column_list}) {
+      next if $column->related;
+
       push @columns, $column if $column->methods->{$name};
    }
 
    return \@columns;
 }
 
-=item get_message
+=item C<get_message>
+
+   $message = $self->get_message($method_name, $id?);
+
+Fetches the success information message for the given method. Substitutes
+the optional id for the first positional parameter C<[_1]>. Returns the
+message. Used as the log message for a successful operation
 
 =cut
 
@@ -308,8 +425,9 @@ sub _build_options {
    my ($self, $context, $params) = @_;
 
    my $options = {};
+   my @columns = (@{$self->_pagination_columns}, @{$self->_content_columns});
 
-   for my $col_name (map { $_->name } @{$self->_pagination_columns}) {
+   for my $col_name (map { $_->name } @columns) {
       my $build_method = "_build_options_${col_name}";
 
       $options = { %{$options}, %{$self->$build_method($params)}, };
@@ -341,6 +459,14 @@ sub _build_options_page_size {
       unless $size =~ m{ \A [0-9]+ \z }mx && $size >= 1 && $size <= $max_size;
 
    return { rows => $size };
+}
+
+sub _build_options_prefetch {
+   my ($self, $params) = @_;
+
+   return {} unless $params->{prefetch};
+
+   return { prefetch => $params->{prefetch} };
 }
 
 sub _build_options_sort_by {
@@ -483,14 +609,16 @@ sub _not_found {
 }
 
 sub _serialise {
-   my ($self, $method_name, $object) = @_;
+   my ($self, $method_name, $object, $options) = @_;
 
    if (blessed $object) {
       if ($object->can('serialise_api')) {
-         return $self->_serialise($method_name, $object->serialise_api);
+         my $value = $object->serialise_api;
+
+         return $self->_serialise($method_name, $value, $options);
       }
       elsif ($object->isa('DBIx::Class::ResultSet')) {
-         return $self->_serialise($method_name, [$object->all]);
+         return $self->_serialise($method_name, [$object->all], $options);
       }
       elsif ($object->isa('DBIx::Class')) {
          my $obj_columns = {};
@@ -501,15 +629,19 @@ sub _serialise {
             my $field_name = $col->name;
             my $value;
 
-            if ($col->has_getter) { $value = $col->getter->($object) }
+            if ($col->has_getter) {
+               $value = $col->getter->($self, $method_name, $object, $options);
+            }
             else { $value = $object->$field_name }
+
+            next unless defined $value;
 
             $value = json_bool $value if $col->type && $col->type eq 'bool';
 
             $obj_columns->{$field_name} = $value;
          }
 
-         return $self->_serialise($method_name, $obj_columns);
+         return $self->_serialise($method_name, $obj_columns, $options);
       }
       elsif ($object->isa('DateTime')) {
          $object->set_time_zone('UTC');
@@ -528,13 +660,17 @@ sub _serialise {
       throw 'Object [_1] cannot serialise', args => $args, rv => $rv;
    }
    elsif (is_arrayref $object) {
-      return [ map { $self->_serialise($method_name, $_) } @{$object} ];
+      return [
+         map { $self->_serialise($method_name, $_, $options) } @{$object}
+      ];
    }
    elsif (is_hashref $object) {
       my %hash;
 
       for my $key (keys %{$object}){
-         $hash{$key} = $self->_serialise($method_name, $object->{$key});
+         my $value = $object->{$key};
+
+         $hash{$key} = $self->_serialise($method_name, $value, $options);
       }
 
       return \%hash;
@@ -547,6 +683,19 @@ sub _serialise {
    }
 
    return;
+}
+
+sub _serialise_related {
+   my ($self, $moniker, $relation_name, $method_name, $object, $options) = @_;
+
+   my $prefetch = $options->{prefetch};
+
+   return unless $prefetch && $prefetch eq $relation_name;
+
+   my $entity  = $self->application->get_entity($moniker);
+   my $related = [$object->$relation_name->all];
+
+   return $entity->_serialise($method_name, $related, $options);
 }
 
 sub _success_code {
@@ -562,7 +711,7 @@ sub _validate_constraints {
                          @{ $self->column_list };
 
    for my $column (@constrained) {
-      my $col_name    = $column->name;
+      my $col_name = $column->name;
 
       next unless exists $options->{$col_name} || $method_name eq 'create';
 

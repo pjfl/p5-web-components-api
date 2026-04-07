@@ -28,13 +28,13 @@ Defines the following attributes;
 
 =over 3
 
-=item text
+=item C<text>
 
 =cut
 
 has 'text' => is => 'ro', isa => Str, required => TRUE;
 
-=item type
+=item C<type>
 
 =cut
 
@@ -74,6 +74,7 @@ Defines no methods
 
 =cut
 
+# Private methods
 sub _as_string {
    my $self         = shift;
    my $desc         = $self->text;

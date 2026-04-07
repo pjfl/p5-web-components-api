@@ -1,16 +1,12 @@
 package Web::Components::API::Column;
 
 use Web::Components::API::Constants
-                      qw( FALSE TRUE );
+                      qw( DATA_TYPES FALSE TRUE LOCATIONS );
 use Unexpected::Types qw( ArrayRef Bool CodeRef Dict Enum HashRef
                           NonEmptySimpleStr Optional Str );
 use Web::Components::API::Description;
 use Moo;
 use MooX::HandlesVia;
-
-my $locations = Enum[qw(body path query)];
-my $types     = Enum[qw(array array_of_hash array_of_int bool datetime dbl
-                        hash hash/array_of_hash int int/str str )];
 
 =pod
 
@@ -34,7 +30,9 @@ Defines the following attributes;
 
 =over 3
 
-=item constraints
+=item C<constraints>
+
+A C<Dict> defining constraints that are applied to this column value
 
 =cut
 
@@ -49,7 +47,9 @@ has 'constraints' =>
    handles     => { has_constraints => 'count' },
    default     => sub { {} };
 
-=item constraints_display
+=item C<constraints_display>
+
+Display string for the constraints in the documentation
 
 =cut
 
@@ -63,9 +63,11 @@ has 'constraints_display' =>
       return $actions->{validate} ? $actions->{validate} : 'None';
    };
 
-=item description
+=item C<description>
 
-=item has_description
+A text description of this column
+
+=item C<has_description>
 
 Predicate
 
@@ -90,39 +92,63 @@ has '_description' =>
    init_arg => 'description',
    default  => 'Undocumented';
 
-=item getter
+=item C<getter>
 
-=item has_getter
+Optional code reference. If present when this column is serialised it will
+be called and it's return value used instead of the raw column value
+
+=item C<has_getter>
 
 Predicate
 
 =cut
 
-has 'getter' => is => 'ro', isa => CodeRef, predicate => TRUE;
+has 'getter' => is => 'rw', isa => CodeRef, predicate => TRUE;
 
-=item location
+=item C<location>
+
+Must be one of the C<LOCATIONS> exported by L<Web::Components::API::Constants>.
+Defaults to C<query>
 
 =cut
 
-has 'location' => is => 'ro', isa => $locations, default => 'query';
+has 'location' => is => 'ro', isa => Enum[LOCATIONS], default => 'query';
 
-=item name
+=item C<name>
+
+The name of this column. Required
 
 =cut
 
 has 'name' => is => 'ro', isa => NonEmptySimpleStr, required => TRUE;
 
-=item methods
+=item C<methods>
+
+A hash reference of booleans. Keys present are C<method> names and their
+presence denotes that this column is to be included when that method is
+called
 
 =cut
 
 has 'methods' => is => 'ro', isa => HashRef[Bool], default => sub { {} };
 
-=item type
+=item C<related>
+
+The C<moniker> for the related API object. Used to identify the columns
+that are serialised for related objects
 
 =cut
 
-has 'type' => is => 'ro', isa => $types, required => TRUE;
+has 'related' => is => 'ro', isa => Str, trigger => TRUE;
+
+=item C<type>
+
+The data type for this column. Must be one of the C<DATA_TYPES> exported
+by L<Web::Components::API::Constants>
+
+=cut
+
+has 'type' => is => 'ro', isa => Enum[DATA_TYPES], required => TRUE;
 
 =back
 
@@ -131,6 +157,16 @@ has 'type' => is => 'ro', isa => $types, required => TRUE;
 Defines no methods
 
 =cut
+
+#Private methods
+sub _trigger_related {
+   my ($self, $value) = @_;
+
+   my $name = $self->name;
+
+   $self->getter(sub { shift->_serialise_related($value, $name, @_) });
+   return;
+}
 
 use namespace::autoclean;
 

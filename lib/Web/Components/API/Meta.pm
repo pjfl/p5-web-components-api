@@ -26,7 +26,12 @@ Defines the following attributes;
 
 =over 3
 
-=item column_list
+=item C<column_list>
+
+An array reference of L<Web::Components::Column> objects
+
+Handles; C<add_to_column_list>, C<clear_column_list>, and C<has_column_list>
+via the Array trait
 
 =cut
 
@@ -41,7 +46,12 @@ has 'column_list' =>
       has_column_list    => 'count',
    };
 
-=item method_list
+=item C<method_list>
+
+An array reference of L<Web::Components::Method> objects
+
+Handles; C<add_to_method_list>, C<clear_method_list>, and C<has_method_list>
+via the Array trait
 
 =cut
 

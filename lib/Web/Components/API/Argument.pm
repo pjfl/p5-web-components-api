@@ -1,14 +1,10 @@
 package Web::Components::API::Argument;
 
 use Web::Components::API::Constants
-                      qw( FALSE TRUE );
+                      qw( DATA_TYPES FALSE TRUE LOCATIONS );
 use Unexpected::Types qw( Enum HashRef NonEmptySimpleStr Str );
 use Web::Components::API::Description;
 use Moo;
-
-my $locations = Enum[qw(body path query)];
-my $types     = Enum[qw(array array_of_hash array_of_int bool datetime dbl
-                        hash hash/array_of_hash int int/str str )];
 
 =pod
 
@@ -32,7 +28,9 @@ Defines the following attributes;
 
 =over 3
 
-=item description
+=item C<description>
+
+A text description of this argument
 
 =item has_description
 
@@ -59,21 +57,28 @@ has '_description' =>
    init_arg => 'description',
    default  => 'Undocumented';
 
-=item location
+=item C<location>
+
+Must be one of the C<LOCATIONS> exported by L<Web::Components::API::Constants>.
+Defaults to C<query>
 
 =cut
 
-has 'location' => is => 'ro', isa => $locations, default => 'query';
+has 'location' => is => 'ro', isa => Enum[LOCATIONS], default => 'query';
 
-=item name
+=item C<name>
+
+The name of this argument. Required
 
 =cut
 
 has 'name' => is => 'ro', isa => NonEmptySimpleStr, required => TRUE;
 
-=item fields
+=item C<fields>
 
-=item has_fields
+Key used by the documentation method C<fields> in the base class
+
+=item C<has_fields>
 
 Predicate
 
@@ -81,11 +86,14 @@ Predicate
 
 has 'fields' => is => 'ro', isa => Str, predicate => TRUE;
 
-=item type
+=item C<type>
+
+The data type for this column. Must be one of the C<DATA_TYPES> exported
+by L<Web::Components::API::Constants>
 
 =cut
 
-has 'type' => is => 'ro', isa => $types, required => TRUE;
+has 'type' => is => 'ro', isa => Enum[DATA_TYPES], required => TRUE;
 
 =back
 
