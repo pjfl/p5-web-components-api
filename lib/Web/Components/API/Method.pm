@@ -95,7 +95,7 @@ has '_description' =>
 
 =item C<examples>
 
-An array reference of optinal C<Dict> types. Defines the examples used in
+An array reference of optional C<Dict> types. Defines the examples used in
 the documentation
 
 =cut
@@ -211,7 +211,7 @@ has 'route_display' =>
 
 =item C<route_match>
 
-Turns th C<route> attribute value into one suitable for a L<Web::Dispatch>
+Turns the C<route> attribute value into one suitable for a L<Web::Dispatch>
 route
 
 =cut

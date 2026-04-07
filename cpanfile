@@ -24,7 +24,9 @@ on 'build' => sub {
 };
 
 on 'test' => sub {
+  requires "Class::Null" => "2.110730";
   requires "File::Spec" => "0";
+  requires "JSON::MaybeXS" => "1.004004";
   requires "Module::Build" => "0.4004";
   requires "Module::Metadata" => "0";
   requires "Sys::Hostname" => "0";

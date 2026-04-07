@@ -1,7 +1,7 @@
 package Web::Components::API;
 
 use 5.010001;
-use version; our $VERSION = qv( sprintf '0.1.%d', q$Rev: 6 $ =~ /\d+/gmx );
+use version; our $VERSION = qv( sprintf '0.1.%d', q$Rev: 7 $ =~ /\d+/gmx );
 
 use Web::Components::API::Constants
                           qw( EXCEPTION_CLASS FALSE NUL TRUE );
@@ -10,7 +10,7 @@ use HTTP::Status          qw( HTTP_BAD_REQUEST HTTP_CONFLICT HTTP_FORBIDDEN
                               HTTP_TOO_MANY_REQUESTS HTTP_UNAUTHORIZED
                               HTTP_UNPROCESSABLE_ENTITY
                               is_error status_message );
-use Unexpected::Types     qw( ArrayRef HashRef Int Str );
+use Unexpected::Types     qw( ArrayRef HashRef Int Object Str );
 use List::Util            qw( first );
 use MIME::Base64          qw( decode_base64url encode_base64url );
 use Scalar::Util          qw( blessed );
@@ -74,7 +74,7 @@ REST API for L<Web::Components> applications
 
 The example above does not define the attributes used to instantiate the
 L<Web::Components::API> object. A model with a C<moniker> of C<rest> is
-also required. This should proxy the methods provided by the API object
+also required. This should proxy the methods provided by this API object
 
 =head1 Configuration and Environment
 
@@ -104,11 +104,15 @@ has 'api_config' => is => 'ro', isa => HashRef, default => sub { {} };
 
 =item C<config>
 
-A required configuration object
+A required configuration object. Passed to the constructor which loads and
+instantiates API entities each of which must have L<Web::Components::Role>
+applied which requires a C<config> object
 
 =cut
 
-has 'config' => is => 'ro', required => TRUE;
+my $config_provider = Object->where('$_->can(q(appclass))');
+
+has 'config' => is => 'ro', isa => $config_provider, required => TRUE;
 
 =item C<dispatch_prefix>
 
@@ -155,34 +159,40 @@ has 'entities' =>
 
 =item C<json_parser>
 
-A required JSON parsing object
+A required JSON parsing object. Should provide; C<decode> and C<encode> methods
 
 =cut
 
-has 'json_parser' => is => 'ro', required => TRUE;
+my $json_parser = Object->where('$_->can(q(decode)) && $_->can(q(encode))');
+
+has 'json_parser' => is => 'ro', isa => $json_parser, required => TRUE;
 
 =item C<log>
 
-A required logging object
+A required logging object. Should provide; C<error>, and C<info> methods
 
 =cut
 
-has 'log' => is => 'ro', required => TRUE;
+my $logger = Object->where('$_->can(q(error)) && $_->can(q(info))');
+
+has 'log' => is => 'ro', isa => $logger, required => TRUE;
 
 =item C<max_page_size>
 
-Maximum number of objects to return in a single API call. Defaults to 250
+Maximum number of objects to return in a single API call. Defaults to two
+hundred
 
 =cut
 
 has 'max_page_size' =>
    is      => 'lazy',
    isa     => Int,
-   default => sub { shift->api_config->{max_page_size} // 250 };
+   default => sub { shift->api_config->{max_page_size} // 200 };
 
 =item C<max_req_per_min>
 
-Maximum number of requests per minute. Used to throttle clients
+Maximum number of requests per minute. Used to throttle clients. Defaults
+to five
 
 =cut
 
@@ -193,11 +203,14 @@ has 'max_req_per_min' =>
 
 =item C<redis_client>
 
-A required L<Redis> client object
+A required L<Redis> client object. Should provide; C<del>, C<get>, and
+C<set_with_ttl> methods
 
 =cut
 
-has 'redis_client' => is => 'ro', required => TRUE;
+my $redis_client = Object->where('$_->can(q(set_with_ttl))');
+
+has 'redis_client' => is => 'ro', isa => $redis_client, required => TRUE;
 
 =item C<request_token_lifetime>
 

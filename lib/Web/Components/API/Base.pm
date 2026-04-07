@@ -128,11 +128,12 @@ has '_pagination_columns' =>
 
 =item C<max_page_size>
 
-Maximum number of objects to return in a single API call. Defaults to 250
+Maximum number of objects to return in a single API call. Defaults to
+two hundred
 
 =cut
 
-has 'max_page_size' => is => 'ro', isa => Int, default => 250;
+has 'max_page_size' => is => 'ro', isa => Int, default => 200;
 
 =item C<method_list>
 
@@ -329,7 +330,7 @@ sub search {
 
    $tuple = $self->update($context, @args);
 
-Updates an existsing persisted object. The first of the C<args> is the id of
+Updates an existing persisted object. The first of the C<args> is the id of
 the object being updated. Update parameters are taken from
 C<context>.C<request>.C<body_parameters>. Returns the same tuple as the
 C<get> method but adds the id of the updated object

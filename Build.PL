@@ -33,7 +33,9 @@ my $prereqs  = {
     'strictures' => '2.000006'
   },
   'test_requires' => {
+    'Class::Null' => '2.110730',
     'File::Spec' => '0',
+    'JSON::MaybeXS' => '1.004004',
     'Module::Build' => '0.4004',
     'Module::Metadata' => '0',
     'Sys::Hostname' => '0',

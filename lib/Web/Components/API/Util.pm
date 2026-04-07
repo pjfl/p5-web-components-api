@@ -52,7 +52,7 @@ sub create_token () {
 
    $digest = digest $seed;
 
-Return an instance of the best L<Digest> algorithmn available to which
+Return an instance of the best L<Digest> algorithm available to which
 C<seed> has been added
 
 =cut
