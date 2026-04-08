@@ -1,7 +1,7 @@
 package Web::Components::API;
 
 use 5.010001;
-use version; our $VERSION = qv( sprintf '0.1.%d', q$Rev: 8 $ =~ /\d+/gmx );
+use version; our $VERSION = qv( sprintf '0.1.%d', q$Rev: 9 $ =~ /\d+/gmx );
 
 use Web::Components::API::Constants
                           qw( EXCEPTION_CLASS FALSE NUL TRUE );
@@ -315,7 +315,7 @@ sub access_token {
 
    my $user = $context->find_user({ username => $userid });
 
-   return [HTTP_UNAUTHORIZED, { message => "User ${userid} not found" }]
+   return [HTTP_UNAUTHORIZED, { message => "User '${userid}' not found" }]
       unless $user;
 
    return [HTTP_OK, { access_token => $self->_create_access_token($user) }];
@@ -342,7 +342,7 @@ sub authorise {
       username => $req->body_parameters->{username},
       password => $req->body_parameters->{password},
    };
-   my $result;
+   my $response;
 
    try {
       $options->{user} = $context->find_user($options);
@@ -354,11 +354,11 @@ sub authorise {
       my $lifetime = $self->request_token_lifetime;
 
       $self->redis_client->set_with_ttl($key, $userid, $lifetime);
-      $result = [HTTP_OK, { request_token => $token }];
+      $response = [HTTP_OK, { request_token => $token }];
    }
-   catch { $result = [HTTP_UNAUTHORIZED, { message => "${_}" }] };
+   catch { $response = [HTTP_UNAUTHORIZED, { message => "${_}" }] };
 
-   return $result;
+   return $response;
 }
 
 =item C<dispatch>
@@ -377,32 +377,31 @@ the request. The first argument should be the version from the request
 sub dispatch {
    my ($self, $context, @args) = @_;
 
-   my $version = shift @args;
-   my $result  = $self->_is_throttled($context);
+   my $version  = shift @args;
+   my $response = $self->_is_throttled($context);
 
-   return $result if is_error($result->[0]);
+   return $response if is_error($response->[0]);
 
-   $result = $self->_is_authorised($context);
+   $response = $self->_is_authorised($context);
 
-   return $result if is_error($result->[0]);
+   return $response if is_error($response->[0]);
 
-   $self->_update_session($context, $result->[1]);
+   $self->_update_session($context, $response->[1]);
 
    try {
-      my $chain  = $context->action // NUL;
-      my (undef, undef, $moniker, $action) = split m{ / }mx, $chain;
+      my ($moniker, $action) = $self->_get_dispatch_args($context);
       my $entity = $self->get_entity($moniker);
       my $method = $self->_versioned_method($entity, $action, $version);
 
-      $result = $entity->$method($context, @args);
+      $response = $entity->$method($context, @args);
 
-      my $message = $entity->get_message($action, $result->[2]);
+      my $message = $entity->get_message($action, $response->[2]);
 
       $self->log->info($message, $context) if $message;
    }
-   catch { $result = $self->_handle_errors($context, $_) };
+   catch { $response = $self->_handle_errors($context, $_) };
 
-   return $result;
+   return $response;
 }
 
 =item C<get_entity>
@@ -442,11 +441,11 @@ C<context>.C<request>.C<headers>.C<Authorization>
 sub refresh {
    my ($self, $context) = @_;
 
-   my $result = $self->_is_authorised($context);
+   my $response = $self->_is_authorised($context);
 
-   return $result if is_error($result->[0]);
+   return $response if is_error($response->[0]);
 
-   my $token = $self->_encode_access_token($result->[1]);
+   my $token = $self->_encode_access_token($response->[1]);
 
    return [HTTP_OK, { access_token => $token }];
 }
@@ -513,6 +512,15 @@ sub _encode_access_token {
    my $verify  = $self->_jwt_hash("${salt}${payload}");
 
    return "${salt}.${payload}.${verify}";
+}
+
+sub _get_dispatch_args {
+   my ($self, $context) = @_;
+
+   my $chain = $context->action // NUL;
+   my (undef, undef, $moniker, $action) = split m{ / }mx, $chain;
+
+   return ($moniker, $action);
 }
 
 sub _handle_errors {

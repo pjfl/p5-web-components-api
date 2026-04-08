@@ -2,8 +2,7 @@ package Web::Components::API::Base;
 
 use Web::Components::API::Constants
                                qw( API_META EXCEPTION_CLASS FALSE NUL TRUE );
-use HTTP::Status               qw( HTTP_FORBIDDEN HTTP_NOT_FOUND
-                                   HTTP_UNPROCESSABLE_ENTITY is_error );
+use HTTP::Status               qw( HTTP_FORBIDDEN HTTP_NOT_FOUND is_error );
 use Unexpected::Types          qw( ArrayRef Int Str );
 use List::Util                 qw( first );
 use Ref::Util                  qw( is_arrayref is_hashref is_scalarref );
@@ -253,10 +252,12 @@ sub create {
    my $id     = $result->id;
 
    $result->discard_changes;
-   $result = $self->get($context, $id);
-   $result = [$code, $result->[1]] unless is_error($result->[0]);
-   $result->[2] = $id;
-   return $result;
+
+   my $response = $self->get($context, $id);
+
+   $response      = [$code, $response->[1]] unless is_error($response->[0]);
+   $response->[2] = $id;
+   return $response;
 }
 
 =item C<delete>
@@ -351,10 +352,11 @@ sub update {
    $self->_validate_constraints('update', $options);
    $result->update($options);
    $result->discard_changes;
-   $result = $self->get($context, $id);
-   $result->[2] = $id;
 
-   return $result;
+   my $response = $self->get($context, $id);
+
+   $response->[2] = $id;
+   return $response;
 }
 
 =item C<fields>
@@ -425,12 +427,20 @@ sub _build_options {
    my ($self, $context, $params) = @_;
 
    my $options = {};
-   my @columns = (@{$self->_pagination_columns}, @{$self->_content_columns});
 
-   for my $col_name (map { $_->name } @columns) {
-      my $build_method = "_build_options_${col_name}";
+   return $options unless $params;
 
-      $options = { %{$options}, %{$self->$build_method($params)}, };
+   for my $method_name (qw(content pagination)) {
+      my $filtered  = $self->_filter_params($context, $method_name, $params);
+      my $attr_name = "_${method_name}_columns";
+
+      next unless scalar keys %{$filtered};
+
+      for my $col_name (map { $_->name } @{$self->$attr_name}) {
+         my $build_method = "_build_options_${col_name}";
+
+         $options = { %{$options}, %{$self->$build_method($filtered)}, };
+      }
    }
 
    return $options;
@@ -440,9 +450,8 @@ sub _build_options_page {
    my ($self, $params) = @_;
 
    my $page = $params->{page} // 1;
-   my $rv   = HTTP_UNPROCESSABLE_ENTITY;
 
-   throw 'Argument [_1] invalid', args => ['page'], rv => $rv
+   throw 'Argument [_1] invalid', args => ['page']
       unless $page =~ m{ \A [0-9]+ \z }mx && $page > 0;
 
    return { page => $page };
@@ -453,9 +462,8 @@ sub _build_options_page_size {
 
    my $max_size = $self->max_page_size;
    my $size     = $params->{page_size} // $max_size;
-   my $rv       = HTTP_UNPROCESSABLE_ENTITY;
 
-   throw 'Argument [_1] invalid', args => ['page_size'], rv => $rv
+   throw 'Argument [_1] invalid', args => ['page_size']
       unless $size =~ m{ \A [0-9]+ \z }mx && $size >= 1 && $size <= $max_size;
 
    return { rows => $size };
@@ -477,11 +485,10 @@ sub _build_options_sort_by {
    return {} unless $params->{sort_by};
 
    my ($column, $dirn) = split m{ [ ] }mx, $params->{sort_by};
-   my $rv              = HTTP_UNPROCESSABLE_ENTITY;
 
    $dirn = 'asc' unless $dirn;
 
-   throw 'Argument [_1] invalid', args => ['sort_by'], rv => $rv
+   throw 'Argument [_1] invalid', args => ['sort_by']
       unless $column && $dirn =~ m{ \A (asc)|(desc) \z }imx;
 
    return { order_by => { "-${dirn}" => "me.${column}" } };
@@ -509,11 +516,7 @@ sub _build_where {
 
             push @clauses, $self->_combine_clauses('OR', \@sub_clauses);
          }
-         else {
-            my $rv = HTTP_UNPROCESSABLE_ENTITY;
-
-            throw 'Argument [_1] invalid', args => [$col], rv => $rv;
-         }
+         else { throw 'Argument [_1] invalid', args => [$col] }
       }
       else { push @clauses, $self->_build_clause($name, $col, $value) }
    }
@@ -546,41 +549,41 @@ sub _combine_clauses {
 sub _filter_params {
    my ($self, $context, $method_name, $params) = @_;
 
-   my %record;
+   my %options;
 
-   for my $column_name (keys %{$params}) {
-      my $col = $self->_find_column($column_name, $method_name) or next;
+   for my $key (keys %{$params}) {
+      my $column = $self->_find_column($method_name, $key) or next;
 
       # Special case 1: If the column is declared as int, and
       # the Perl value is false and is NOT explicitly zero, then
       # the caller probably means NULL, so set the value to undef.
       # This enables, for example, searching on a NULL artistid
-      my $column_nullable = $col->type eq 'int' ? TRUE : FALSE;
+      my $column_nullable = $column->type eq 'int' ? TRUE : FALSE;
 
       # Special case 2: If the column is declared as int/str
       # then it's a user field that can be an ID /or/ en email.
       # Look it up if it's an email.
-      if ($col->type eq 'int|str') {
-         my $user = $context->find_user({ username => $params->{$column_name}});
+      if ($column->type eq 'int|str') {
+         my $user = $context->find_user({ username => $params->{$key}});
 
-         $params->{$column_name} = $user->id;
+         $params->{$key} = $user->id;
       }
 
-      my $value = $params->{$column_name} // NUL;
+      my $value = $params->{$key} // NUL;
 
       $value = "${value}" unless is_arrayref $value;
       $value = undef if $column_nullable && $value eq NUL;
 
-      $record{$column_name} = $value;
+      $options{$key} = $value;
    }
 
-   return \%record;
+   return \%options;
 }
 
 sub _find_column {
-   my ($self, $column_name, $method_name) = @_;
+   my ($self, $method_name, $column_name) = @_;
 
-   return first { $_->name eq $column_name && $_->methods->{$method_name} }
+   return first { $_->methods->{$method_name} && $_->name eq $column_name }
                @{$self->column_list};
 }
 
@@ -656,10 +659,7 @@ sub _serialise {
          return $object;
       }
 
-      my $rv   = HTTP_UNPROCESSABLE_ENTITY;
-      my $args = [blessed $object];
-
-      throw 'Object [_1] cannot serialise', args => $args, rv => $rv;
+      throw 'Object [_1] cannot serialise', [blessed $object];
    }
    elsif (is_arrayref $object) {
       return [
@@ -748,14 +748,10 @@ sub _qualify_constraint_actions {
 sub _quote_column_name {
    my @parts = @_;
 
-   my $rv = HTTP_UNPROCESSABLE_ENTITY;
-
    for my $part (@parts) {
-      throw 'Invalid column name. Column must not be empty', rv => $rv
-         unless $part;
+      throw 'Invalid column name. Column must not be empty' unless $part;
 
-      throw 'Invalid column name. Found double quote', rv => $rv
-         if $part =~ m{ " }mx;
+      throw 'Invalid column name. Found double quote' if $part =~ m{ " }mx;
 
       $part = sprintf '"%s"', $part;
    }

@@ -1,6 +1,8 @@
 use t::boilerplate;
+use lib 't/lib';
 
-use HTTP::Status qw( HTTP_OK HTTP_UNAUTHORIZED HTTP_UNPROCESSABLE_ENTITY );
+use HTTP::Status qw( HTTP_BAD_REQUEST HTTP_NOT_FOUND HTTP_OK HTTP_UNAUTHORIZED
+                     HTTP_UNPROCESSABLE_ENTITY );
 use Scalar::Util qw( blessed );
 use IO::String;
 use JSON::MaybeXS;
@@ -20,19 +22,22 @@ use_ok 'Web::Components::API';
 
 my $ttl;
 
-sub message { shift->[1]->{message} }
+sub message { my $m = shift->[1]->{message}; chomp $m; return $m }
+
 {  package Test::Config;
    use Moo;
    has 'appclass' => is => 'ro';
    has 'prefix'   => is => 'lazy', default => sub { lc shift->appclass };
 }
 my $config = Test::Config->new({ appclass => 'Test' });
+
 {  package Test::Log;
    use Moo;
    sub error {}
    sub info {}
 }
 my $logger = Test::Log->new;
+
 {  package Test::RedisClient;
    use Moo;
    has '_store' => is => 'ro', default => sub { {} };
@@ -52,18 +57,32 @@ my $logger = Test::Log->new;
    }
 }
 my $redis = Test::RedisClient->new;
-{  package Test::ResultSet;
-   sub new { bless {}, 'DBIx::Class::ResultSet' }
+
+{  package DBIx::Class;
+   use Moo;
+   has 'active'        => is => 'rw', default => 1;
+   has 'artistid'      => is => 'rw', default => 1;
+   has 'import_log_id' => is => 'rw';
+   has 'name'          => is => 'rw', default => 'A Band';
+   has 'upvotes'       => is => 'rw', default => 10;
+}
+{  package DBIx::Class::ResultSet;
+   use Moo;
    sub all {}
    sub create {}
-   sub find_by_key {}
+   sub find_by_key {
+      my ($self, $key) = @_;
+      return unless $key eq 1;
+      return DBIx::Class->new;
+   }
    sub search {}
 }
-{  package Test::Schema;
-   sub new { bless {}, 'DBIx::Class::Schema' }
-   sub resultset { Test::ResultSet->new }
+{  package DBIx::Class::Schema;
+   use Moo;
+   sub resultset { DBIx::Class::ResultSet->new }
 }
-my $schema = Test::Schema->new;
+my $schema = DBIx::Class::Schema->new;
+
 {  package Test::Role;
    use Moo;
    has 'name' => is => 'ro', default => 'edit';
@@ -76,10 +95,12 @@ my $schema = Test::Schema->new;
    has 'role'     => is => 'ro', default => sub { Test::Role->new };
 }
 my $user = Test::User->new;
+
 {  package Test::Context;
    use Unexpected::Functions qw( throw );
    use Moo;
    extends 'Web::Components::Context';
+   has '_access_code' => is => 'rw', default => q();
    sub authenticate {
       my ($self, $options) = @_;
       return 1 if $user->password eq $options->{password};
@@ -91,9 +112,11 @@ my $user = Test::User->new;
       return $user if $username =~ m{ \d }mx && $user->id eq $username;
       return $user->name eq $username ? $user : undef;
    }
-   sub is_authorised { warn $_[1] }
+   sub is_authorised { my ($self, $code) = @_; $self->_access_code($code) }
 }
+
 my $json_parser = JSON::MaybeXS->new;
+
 {  package Test::ContextFactory;
    use Moo;
    has 'request' => is => 'rw';
@@ -109,8 +132,6 @@ my $json_parser = JSON::MaybeXS->new;
          HTTP_AUTHORIZATION   => 'Bearer ' . $self->token,
          HTTP_HOST            => 'localhost:5000',
          HTTP_REFERER         => 'asif',
-         PATH_INFO            => '/rest',
-         QUERY_STRING         => '',
          REMOTE_ADDR          => '127.0.0.1',
          REMOTE_HOST          => 'notlikely',
          REQUEST_METHOD       => $method,
@@ -136,39 +157,67 @@ my $args = {
 my $api  = Web::Components::API->new($args);
 
 is blessed $api, 'Web::Components::API', 'API Constructs';
-is $api->routes, 0, 'API Routes - Empty';
+is $api->routes, 10, 'API Routes - For one entity';
 
-my $path    = '';
-my $query   = {};
-my $body    = { username => $user->name, password => $user->password };
-my $context = $factory->new_context('POST', $path, $query, $body);
-my $result  = $api->authorise($context);
-my $token   = $result->[1]->{request_token};
+my $entity = $api->get_entity('artist');
 
-is $result->[0], HTTP_OK, 'Authorise - OK';
+is $entity->result_class, 'Artist', 'API Get Entity - Result class';
+
+my $path     = '';
+my $query    = {};
+my $body     = { username => $user->name, password => 'liarliar' };
+my $context  = $factory->new_context('POST', $path, $query, $body);
+my $response = $api->authorise($context);
+
+is $response->[0], HTTP_UNAUTHORIZED, 'Authorise - ' . message($response);
+
+$body     = { username => $user->name, password => $user->password };
+$context  = $factory->new_context('POST', $path, $query, $body);
+$response = $api->authorise($context);
+
+my $token = $response->[1]->{request_token};
+
+is $response->[0], HTTP_OK, 'Authorise - OK';
 ok $token, 'Authorise - Request token';
 is $redis->get("api_request-${token}"), $user->id, 'Authorise - Stores user ID';
 is $redis->_ttl, 180, 'Authorise - Default token lifetime';
 
-$result = $api->access_token($context);
+$response = $api->access_token($context);
 
-is $result->[0], HTTP_UNAUTHORIZED, 'Access Token - ' . message($result);
+is $response->[0], HTTP_UNAUTHORIZED, 'Access Token - ' . message($response);
 
-$body    = { request_token => $token };
-$context = $factory->new_context('POST', $path, $query, $body);
-$result  = $api->access_token($context);
-$token   = $result->[1]->{access_token};
+$body     = { request_token => $token };
+$context  = $factory->new_context('POST', $path, $query, $body);
+$response = $api->access_token($context);
+$token    = $response->[1]->{access_token};
 
-is $result->[0], HTTP_OK, 'Access Token - OK';
+is $response->[0], HTTP_OK, 'Access Token - OK';
 ok $token, 'Access Token - Fetches token';
+
+$context  = $factory->new_context('GET', $path, $query);
+$response = $api->dispatch($context, 'v1');
+
+is $response->[0], HTTP_BAD_REQUEST, 'Dispatch - ' . message($response);
 
 $factory->token($token);
 
-$path    = 'rest/dispatch/artist';
-$context = $factory->new_context('GET', $path, $query);
-$result  = $api->dispatch($context);
+$path     = 'rest/dispatch/undeclared';
+$context  = $factory->new_context('GET', $path, $query);
+$response = $api->dispatch($context, 'v1');
 
-is $result->[0], HTTP_UNPROCESSABLE_ENTITY, 'Dispatch - ' . message($result);
+is $response->[0], HTTP_UNPROCESSABLE_ENTITY, 'Dispatch - '.message($response);
+
+$path     = 'rest/dispatch/artist/get';
+$context  = $factory->new_context('GET', $path, $query);
+$response = $api->dispatch($context, 'v1', 99);
+
+is $response->[0], HTTP_NOT_FOUND, 'Dispatch - ' . message($response);
+is $context->_access_code, 'artist/view', 'Dispatch - Access code';
+
+$response = $api->dispatch($context, 'v1', 1);
+
+is $response->[0], HTTP_OK, 'Dispatch - OK';
+is $response->[1]->{name}, 'A Band', 'Dispatch - Gets result';
 
 done_testing;
 

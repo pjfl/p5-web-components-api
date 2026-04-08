@@ -4,6 +4,7 @@ use overload '""' => sub { shift->_as_string }, fallback => 1;
 
 use Web::Components::API::Constants qw( DATA_TYPES FALSE NUL TRUE );
 use Unexpected::Types               qw( Enum HashRef Str );
+use Web::ComposableRequest::Util    qw( trim );
 use Moo;
 
 =pod
@@ -109,7 +110,7 @@ sub _as_string {
       $desc =~ s{ $directive_re }{$output}mx;
    }
 
-   return $desc;
+   return trim $desc, "\n";
 }
 
 use namespace::autoclean;

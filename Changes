@@ -1,5 +1,6 @@
 Revision history for Web::Components::API
 
+          - Tests can get a result
           - Tests now calling API dispatch
           - Adding tests
           - Completed first pass POD
