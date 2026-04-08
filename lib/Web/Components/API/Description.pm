@@ -2,8 +2,8 @@ package Web::Components::API::Description;
 
 use overload '""' => sub { shift->_as_string }, fallback => 1;
 
-use Web::Components::API::Constants qw( FALSE NUL TRUE );
-use Unexpected::Types               qw( HashRef Str );
+use Web::Components::API::Constants qw( DATA_TYPES FALSE NUL TRUE );
+use Unexpected::Types               qw( Enum HashRef Str );
 use Moo;
 
 =pod
@@ -20,7 +20,8 @@ Web::Components::API::Description - Expands template directives in descriptions
 
 =head1 Description
 
-Expands template directives in descriptions
+Expands template directives in descriptions. Does this when the object
+reference is stringified
 
 =head1 Configuration and Environment
 
@@ -30,15 +31,22 @@ Defines the following attributes;
 
 =item C<text>
 
+A required non-empty string. The text of the description
+
 =cut
 
-has 'text' => is => 'ro', isa => Str, required => TRUE;
+my $non_empty_str = Str->where('length > 0');
+
+has 'text' => is => 'ro', isa => $non_empty_str, required => TRUE;
 
 =item C<type>
 
+The data type for this description. Must be one of the C<DATA_TYPES> exported
+by L<Web::Components::API::Constants>
+
 =cut
 
-has 'type' => is => 'ro', isa => Str;
+has 'type' => is => 'ro', isa => Enum[DATA_TYPES];
 
 has '_transport_types' =>
    is      => 'ro',

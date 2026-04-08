@@ -154,9 +154,20 @@ has 'type' => is => 'ro', isa => Enum[DATA_TYPES], required => TRUE;
 
 =head1 Subroutines/Methods
 
-Defines no methods
+Defines the following methods;
+
+=item BUILD
+
+Force the lazy attributes to evaluate
 
 =cut
+
+sub BUILD {
+   my $self = shift;
+
+   $self->description;
+   return;
+}
 
 #Private methods
 sub _trigger_related {

@@ -88,7 +88,7 @@ has '_content_columns' =>
    default => sub {
       return [
          Web::Components::API::Column->new({
-            name        => 'prefetch',
+            name        => 'include',
             type        => 'str',
             description => 'Include related entities',
             location    => 'query',
@@ -191,8 +191,8 @@ Defines the following methods;
 
 =item C<content_arguments>
 
-Class method. Add these to a methods C<in_args> to include the attributes
-that they define
+Class method. Add these to a methods C<in_args> to include the query parameters
+that they define; C<include>
 
 =cut
 
@@ -210,8 +210,8 @@ sub content_arguments {
 
 =item C<pagination_arguments>
 
-Class method. Add these to a methods C<in_args> to include the attributes
-that they define
+Class method. Add these to a methods C<in_args> to include the query parameters
+that they define; C<page>, C<page_size>, and C<sort_by>
 
 =cut
 
@@ -232,9 +232,9 @@ sub pagination_arguments {
    $tuple = $self->create($context);
 
 Creates a new persisted L<DBIx::Class> result object. Expects
-C<context>.C<request>.C<body_parameters> to contains the attributes and
+C<context>.C<request>.C<body_parameters> to contain the attributes and
 values used to create to object. Returns a tuple containing HTTP status
-code, response body, and the id of the newly created object
+code, response body, and the ID of the newly created object
 
 =cut
 
@@ -263,9 +263,9 @@ sub create {
 
    $tuple = $self->delete($context, @args);
 
-Deletes a persisted object identified by the first of the C<args> passed.
+Deletes a persisted object identified by the first of the passed C<args>.
 Returns a tuple containing an HTTP status code, an empty response body, and
-the id of the deleted object
+the ID of the deleted object
 
 =cut
 
@@ -286,7 +286,7 @@ sub delete {
 
    $tuple = $self->get($context, @args);
 
-Fetches a persisted object identified by the first of the C<args> passed.
+Fetches a persisted object identified by the first of the passed C<args>.
 Returns a tuple containing an HTTP status code, and a response body
 containing the object attributes and values
 
@@ -308,7 +308,8 @@ sub get {
    $tuple = $self->search($context);
 
 Returns an array of persisted object matching the search criteria which are
-extracted from the request query parameters
+extracted from the request query parameters which includes the
+C<content_arguments> and C<pagination_arguments>
 
 =cut
 
@@ -330,10 +331,10 @@ sub search {
 
    $tuple = $self->update($context, @args);
 
-Updates an existing persisted object. The first of the C<args> is the id of
+Updates an existing persisted object. The first of the C<args> is the ID of
 the object being updated. Update parameters are taken from
 C<context>.C<request>.C<body_parameters>. Returns the same tuple as the
-C<get> method but adds the id of the updated object
+C<get> method but adds the ID of the updated object
 
 =cut
 
@@ -358,17 +359,17 @@ sub update {
 
 =item C<fields>
 
-   $columns = $self->fields($object);
+   $columns = $self->fields($argument);
 
 Returns an array reference of column objects associated with the
-C<object>.C<fields> value. Used to display API documentation
+C<argument>.C<fields> value. Used to display API documentation
 
 =cut
 
 sub fields {
-   my ($self, $object) = @_;
+   my ($self, $argument) = @_;
 
-   my $name = $object->fields or return [];
+   my $name = $argument->fields or return [];
    my @columns;
 
    for my $column (@{$self->column_list}) {
@@ -385,7 +386,7 @@ sub fields {
    $message = $self->get_message($method_name, $id?);
 
 Fetches the success information message for the given method. Substitutes
-the optional id for the first positional parameter C<[_1]>. Returns the
+the optional C<id> for the first positional parameter C<[_1]>. Returns the
 message. Used as the log message for a successful operation
 
 =cut
@@ -413,9 +414,7 @@ sub _build_clause {
          );
       }
       elsif ($value =~ m{ \D }mx) {
-         $value = [$col, lc $value];
-         $col   = "LOWER(${quoted_col}) = ?";
-         return \[$col => $value];
+         return \["LOWER(${quoted_col}) = ?" => [$col, lc $value]];
       }
    }
 
@@ -462,12 +461,14 @@ sub _build_options_page_size {
    return { rows => $size };
 }
 
-sub _build_options_prefetch {
+sub _build_options_include {
    my ($self, $params) = @_;
 
-   return {} unless $params->{prefetch};
+   my $includes = $params->{include} or return {};
 
-   return { prefetch => $params->{prefetch} };
+   $includes = [split m{ , }mx, $includes] if $includes =~ m{ , }mx;
+
+   return { prefetch => $includes };
 }
 
 sub _build_options_sort_by {

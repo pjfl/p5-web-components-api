@@ -1,7 +1,7 @@
 package Web::Components::API;
 
 use 5.010001;
-use version; our $VERSION = qv( sprintf '0.1.%d', q$Rev: 7 $ =~ /\d+/gmx );
+use version; our $VERSION = qv( sprintf '0.1.%d', q$Rev: 8 $ =~ /\d+/gmx );
 
 use Web::Components::API::Constants
                           qw( EXCEPTION_CLASS FALSE NUL TRUE );
@@ -15,7 +15,7 @@ use List::Util            qw( first );
 use MIME::Base64          qw( decode_base64url encode_base64url );
 use Scalar::Util          qw( blessed );
 use Type::Utils           qw( class_type );
-use Unexpected::Functions qw( throw );
+use Unexpected::Functions qw( throw Unspecified );
 use Web::Components::API::Util
                           qw( create_token digest );
 use Web::Components::Util qw( load_components );
@@ -349,9 +349,9 @@ sub authorise {
       $context->authenticate($options);
 
       my $token    = create_token;
+      my $key      = "api_request-${token}";
       my $userid   = $options->{user}->id;
       my $lifetime = $self->request_token_lifetime;
-      my $key      = "api_request-${token}";
 
       $self->redis_client->set_with_ttl($key, $userid, $lifetime);
       $result = [HTTP_OK, { request_token => $token }];
@@ -389,8 +389,9 @@ sub dispatch {
    $self->_update_session($context, $result->[1]);
 
    try {
-      my (undef, undef, $moniker, $action) = split m{ / }mx, $context->action;
-      my $entity = $self->entities->{$moniker};
+      my $chain  = $context->action // NUL;
+      my (undef, undef, $moniker, $action) = split m{ / }mx, $chain;
+      my $entity = $self->get_entity($moniker);
       my $method = $self->_versioned_method($entity, $action, $version);
 
       $result = $entity->$method($context, @args);
@@ -416,9 +417,15 @@ attribute C<moniker>. Returns the entity object for the given C<moniker>
 sub get_entity {
    my ($self, $moniker) = @_;
 
-   $moniker //= $self->entity_list->[0];
+   $moniker //= $self->entity_list->[0] // NUL;
 
-   return $self->entities->{$moniker};
+   throw Unspecified, ['moniker'] unless $moniker;
+
+   my $entity = $self->entities->{$moniker};
+
+   throw 'Moniker [_1] unknown', [$moniker] unless $entity;
+
+   return $entity;
 }
 
 =item C<refresh>
@@ -603,6 +610,8 @@ sub _update_session {
 
 sub _versioned_method {
    my ($self, $entity, $action, $version) = @_;
+
+   throw Unspecified, ['action'] unless $action;
 
    (my $wanted = $version) =~ s{ \A v }{}mx;
    my $current = $self->versions->[-1];

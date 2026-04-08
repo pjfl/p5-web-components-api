@@ -1,5 +1,6 @@
 Revision history for Web::Components::API
 
+          - Tests now calling API dispatch
           - Adding tests
           - Completed first pass POD
           - Uses ComposableRequest::Constants since its already in scope

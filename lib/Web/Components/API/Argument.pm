@@ -99,11 +99,22 @@ has 'type' => is => 'ro', isa => Enum[DATA_TYPES], required => TRUE;
 
 =head1 Subroutines/Methods
 
-Defines no methods
+Defines the following methods;
 
 =over 3
 
+=item BUILD
+
+Force the lazy attributes to evaluate
+
 =cut
+
+sub BUILD {
+   my $self = shift;
+
+   $self->description;
+   return;
+}
 
 use namespace::autoclean;
 

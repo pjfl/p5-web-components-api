@@ -24,13 +24,15 @@ on 'build' => sub {
 };
 
 on 'test' => sub {
-  requires "Class::Null" => "2.110730";
   requires "File::Spec" => "0";
+  requires "HTTP::Message" => "6.44";
+  requires "IO::String" => "1.08";
   requires "JSON::MaybeXS" => "1.004004";
   requires "Module::Build" => "0.4004";
   requires "Module::Metadata" => "0";
   requires "Sys::Hostname" => "0";
   requires "Test::Requires" => "0.06";
+  requires "Web::ComposableRequest" => "v0.22.3";
   requires "version" => "0.88";
 };
 

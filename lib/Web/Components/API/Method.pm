@@ -266,6 +266,7 @@ Force the lazy C<in_args> and C<out_arg> to instantiate
 sub BUILD {
    my $self = shift;
 
+   $self->description;
    $self->in_args;
    $self->out_arg;
    return;
