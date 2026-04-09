@@ -1,7 +1,7 @@
 package Web::Components::API;
 
 use 5.010001;
-use version; our $VERSION = qv( sprintf '0.1.%d', q$Rev: 9 $ =~ /\d+/gmx );
+use version; our $VERSION = qv( sprintf '0.1.%d', q$Rev: 10 $ =~ /\d+/gmx );
 
 use Web::Components::API::Constants
                           qw( EXCEPTION_CLASS FALSE NUL TRUE );
@@ -140,7 +140,7 @@ has 'entity_list' =>
 
 An array of objects that inherit from L<Web::Components::API::Base>. These
 are loaded and instantiated from the classes found in the C<API> directory
-
+of the C<config>.C<appclass> namespace
 =cut
 
 has 'entities' =>
@@ -159,7 +159,7 @@ has 'entities' =>
 
 =item C<json_parser>
 
-A required JSON parsing object. Should provide; C<decode> and C<encode> methods
+A required JSON parsing object. Should provide C<decode> and C<encode> methods
 
 =cut
 
@@ -169,7 +169,7 @@ has 'json_parser' => is => 'ro', isa => $json_parser, required => TRUE;
 
 =item C<log>
 
-A required logging object. Should provide; C<error>, and C<info> methods
+A required logging object. Should provide C<error> and C<info> methods
 
 =cut
 
@@ -203,7 +203,7 @@ has 'max_req_per_min' =>
 
 =item C<redis_client>
 
-A required L<Redis> client object. Should provide; C<del>, C<get>, and
+A required L<Redis> client object. Should provide C<del>, C<get> and
 C<set_with_ttl> methods
 
 =cut
@@ -211,6 +211,20 @@ C<set_with_ttl> methods
 my $redis_client = Object->where('$_->can(q(set_with_ttl))');
 
 has 'redis_client' => is => 'ro', isa => $redis_client, required => TRUE;
+
+=item C<refresh_token_lifetime>
+
+Length of time in seconds for which the access token will be able to
+successfully call the refresh endpoint. Defaults to twelve hours. After this
+re-authorisation will needed. If set to zero an access token will continue to
+refresh indefinitely
+
+=cut
+
+has 'refresh_token_lifetime' =>
+   is      => 'lazy',
+   isa     => Int,
+   default => sub { shift->api_config->{refresh_token_lifetime} // 43_200 };
 
 =item C<request_token_lifetime>
 
@@ -249,7 +263,7 @@ has 'route_prefix' =>
 
 =item C<schema>
 
-A required instance of a L<DBIx::Class> schema object
+A required instance of L<DBIx::Class::Schema>
 
 =cut
 
@@ -289,47 +303,14 @@ Defines the following methods;
 
 =over 3
 
-=item C<access_token>
-
-   $tuple = $self->access_token($context);
-
-Exchanges a C<request_token> for an C<access_token>. The returned tuple
-contains an HTTP status code and a hash reference which forms the body of the
-response containing the token. Requires C<request_token> on
-C<context>.C<request>.C<body_parameters>
-
-=cut
-
-sub access_token {
-   my ($self, $context) = @_;
-
-   my $token = $context->request->body_parameters->{request_token};
-
-   return [HTTP_UNAUTHORIZED, { message => 'No request token' }] unless $token;
-
-   my $userid = $self->redis_client->get("api_request-${token}");
-
-   return [HTTP_UNAUTHORIZED, { message => 'No cached token' }] unless $userid;
-
-   $self->redis_client->del("api_request-${token}");
-
-   my $user = $context->find_user({ username => $userid });
-
-   return [HTTP_UNAUTHORIZED, { message => "User '${userid}' not found" }]
-      unless $user;
-
-   return [HTTP_OK, { access_token => $self->_create_access_token($user) }];
-}
-
 =item C<authorise>
 
-   $tuple = $self->authorise($context);
+   $response = $self->authorise($context);
 
-Obtain a C<request_token>. The returned tuple contains an HTTP status code and
-a hash reference which forms the body of the response containing the
-token. Requires C<username> and C<password> on
-C<context>.C<request>.C<body_parameters>. Requires C<find_user> and
-C<authenticate> on C<context>
+Obtain a C<request_token>. The response contains an HTTP status code and a hash
+reference which forms the body containing the token. Requires C<username> and
+C<password> on C<context>.C<request>.C<body_parameters>. Requires C<find_user>
+and C<authenticate> on C<context>
 
 =cut
 
@@ -361,15 +342,55 @@ sub authorise {
    return $response;
 }
 
+=item C<access_token>
+
+   $response = $self->access_token($context);
+
+Exchanges a C<request_token> for a JWT C<access_token>
+
+The response contains an HTTP status code and a hash reference which forms the
+body containing the token. Obtains C<request_token> from
+C<context>.C<request>.C<body_parameters>
+
+The user object returned by C<context>.C<find_user> is expected to have an
+C<api_claim> method which returns the claim hash reference. The keys/values in
+the claim hash reference are applied to C<context>.C<request>.C<session> if the
+session object has attributes of the same name. This will enable
+C<context>.C<is_authorised> to obtain user identity information when it is
+called by the C<dispatch> method
+
+=cut
+
+sub access_token {
+   my ($self, $context) = @_;
+
+   my $token = $context->request->body_parameters->{request_token};
+
+   return [HTTP_UNAUTHORIZED, { message => 'No request token' }] unless $token;
+
+   my $userid = $self->redis_client->get("api_request-${token}");
+
+   return [HTTP_UNAUTHORIZED, { message => 'No cached token' }] unless $userid;
+
+   $self->redis_client->del("api_request-${token}");
+
+   my $user = $context->find_user({ username => $userid });
+
+   return [HTTP_UNAUTHORIZED, { message => "User '${userid}' not found" }]
+      unless $user;
+
+   return [HTTP_OK, { access_token => $self->_create_access_token($user) }];
+}
+
 =item C<dispatch>
 
-   $tuple = $self->dispatch($context, @args);
+   $response = $self->dispatch($context, @args);
 
 Obtains C<moniker/action> from C<context>.C<action>. Uses the C<moniker> to get
 the API entity and then calls C<action> on that object. Requires a valid
 C<access_token> on C<context>.C<request>.C<headers>.C<Authorization>. Requires
 C<is_authorised> on C<context>. The C<args> are the positional parameters from
-the request. The first argument should be the version from the request
+the request. The first argument should be the version from the request path
 (defaults to v1)
 
 =cut
@@ -429,12 +450,16 @@ sub get_entity {
 
 =item C<refresh>
 
-   $tuple = $self->refresh($context);
+   $response = $self->refresh($context);
 
-Obtains a fresh C<access_token>. The returned tuple
-contains an HTTP status code and a hash reference which forms the body of the
-response containing the token. Requires a valid C<access_token> on
+Obtains a fresh C<access_token>
+
+The response contains an HTTP status code and a hash reference which forms the
+body containing the token. Requires a valid C<access_token> from
 C<context>.C<request>.C<headers>.C<Authorization>
+
+An C<access_token> will only refresh for the C<refresh_token_lifetime>, after
+that re-authorisation will be required
 
 =cut
 
@@ -445,9 +470,15 @@ sub refresh {
 
    return $response if is_error($response->[0]);
 
-   my $token = $self->_encode_access_token($response->[1]);
+   my $elapsed  = time - $response->[1]->{_created};
+   my $lifetime = $self->refresh_token_lifetime;
+   my $body     = { message => 'Token too old' };
 
-   return [HTTP_OK, { access_token => $token }];
+   return [HTTP_UNAUTHORIZED, $body] if $lifetime && $elapsed > $lifetime;
+
+   $body = { access_token => $self->_encode_access_token($response->[1]) };
+
+   return [HTTP_OK, $body];
 }
 
 =item C<routes>
@@ -463,8 +494,7 @@ dispatch
 
 sub routes {
    my $self   = shift;
-   my $dpref  = $self->dispatch_prefix;
-   my $mpref  = $self->route_match_prefix;
+   my $prefix = $self->route_match_prefix;
    my @routes = ();
 
    for my $moniker (keys %{$self->entities}) {
@@ -472,10 +502,10 @@ sub routes {
 
       for my $method (@{$entity->method_list}) {
          my $match  = $method->route_match;
-         my $route  = $method->method . " + ${mpref}${match} + ?*";
+         my $route  = $method->method . " + ${prefix}${match} + ?*";
          my $action = $method->action;
 
-         push @routes, $route, "${dpref}/${moniker}/${action}";
+         push @routes, $route, $self->_get_dispatch_method($moniker, $action);
       }
    }
 
@@ -486,9 +516,7 @@ sub routes {
 sub _create_access_token {
    my ($self, $user) = @_;
 
-   my $claim = { id => $user->id, role => $user->role->name };
-
-   return $self->_encode_access_token($claim);
+   return $self->_encode_access_token($user->api_claim);
 }
 
 sub _decode_access_token {
@@ -505,7 +533,8 @@ sub _decode_access_token {
 sub _encode_access_token {
    my ($self, $claim) = @_;
 
-   $claim->{time} = time;
+   $claim->{_refreshed} = time;
+   $claim->{_created} //= $claim->{_refreshed};
 
    my $salt    = encode_base64url(pack('H*', create_token));
    my $payload = encode_base64url($self->json_parser->encode($claim));
@@ -517,10 +546,16 @@ sub _encode_access_token {
 sub _get_dispatch_args {
    my ($self, $context) = @_;
 
-   my $chain = $context->action // NUL;
-   my (undef, undef, $moniker, $action) = split m{ / }mx, $chain;
+   my $method = $context->action // NUL;
+   my (undef, undef, $moniker, $action) = split m{ / }mx, $method;
 
    return ($moniker, $action);
+}
+
+sub _get_dispatch_method {
+   my ($self, $moniker, $action) = @_;
+
+   return $self->dispatch_prefix . "/${moniker}/${action}";
 }
 
 sub _handle_errors {
@@ -561,12 +596,12 @@ sub _is_authorised {
    my $claim = $self->_decode_access_token($token);
 
    return [HTTP_UNAUTHORIZED, { message => 'Token verification failed'}]
-      unless $claim->{id};
+      unless $claim->{_created};
 
-   my $elapsed = time - $claim->{time};
+   my $elapsed = time - $claim->{_refreshed};
 
    return [HTTP_UNAUTHORIZED, { message => 'Token too old' }]
-      unless $elapsed < $self->access_token_lifetime;
+      if $elapsed > $self->access_token_lifetime;
 
    return [HTTP_OK, $claim];
 }
@@ -578,7 +613,7 @@ sub _is_throttled {
    my $address = $context->request->remote_address;
    my $record  = $self->_request_history->{$address} // $default;
    my $max_rpm = $self->max_req_per_min;
-   my $message = "Maximum ${max_rpm} requests per minute";
+   my $body    = { message => "Maximum ${max_rpm} requests per minute" };
    my $now     = time;
 
    $record->{count} += 1;
@@ -587,8 +622,7 @@ sub _is_throttled {
 
    $self->_request_history->{$address} = $record;
 
-   return [HTTP_TOO_MANY_REQUESTS, { message => $message } ]
-      if $record->{count} > $max_rpm;
+   return [HTTP_TOO_MANY_REQUESTS, $body] if $record->{count} > $max_rpm;
 
    return [HTTP_OK];
 }
@@ -609,7 +643,7 @@ sub _update_session {
 
    my $session = $context->session;
 
-   for my $key (keys %{$claim}) {
+   for my $key (grep { $_ !~ m{ \A _ }mx } keys %{$claim}) {
       $session->$key($claim->{$key}) if $session->can($key);
    }
 

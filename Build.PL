@@ -39,6 +39,7 @@ my $prereqs  = {
     'JSON::MaybeXS' => '1.004004',
     'Module::Build' => '0.4004',
     'Module::Metadata' => '0',
+    'Moo' => '2.005005',
     'Sys::Hostname' => '0',
     'Test::Requires' => '0.06',
     'Web::ComposableRequest' => 'v0.22.3',

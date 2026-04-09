@@ -30,6 +30,7 @@ on 'test' => sub {
   requires "JSON::MaybeXS" => "1.004004";
   requires "Module::Build" => "0.4004";
   requires "Module::Metadata" => "0";
+  requires "Moo" => "2.005005";
   requires "Sys::Hostname" => "0";
   requires "Test::Requires" => "0.06";
   requires "Web::ComposableRequest" => "v0.22.3";

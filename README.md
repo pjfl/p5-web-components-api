@@ -79,14 +79,15 @@ Defines the following attributes;
 
     An array of objects that inherit from [Web::Components::API::Base](https://metacpan.org/pod/Web%3A%3AComponents%3A%3AAPI%3A%3ABase). These
     are loaded and instantiated from the classes found in the `API` directory
+    of the `config`.`appclass` namespace
 
 - `json_parser`
 
-    A required JSON parsing object. Should provide; `decode` and `encode` methods
+    A required JSON parsing object. Should provide `decode` and `encode` methods
 
 - `log`
 
-    A required logging object. Should provide; `error`, and `info` methods
+    A required logging object. Should provide `error` and `info` methods
 
 - `max_page_size`
 
@@ -100,8 +101,15 @@ Defines the following attributes;
 
 - `redis_client`
 
-    A required [Redis](https://metacpan.org/pod/Redis) client object. Should provide; `del`, `get`, and
+    A required [Redis](https://metacpan.org/pod/Redis) client object. Should provide `del`, `get` and
     `set_with_ttl` methods
+
+- `refresh_token_lifetime`
+
+    Length of time in seconds for which the access token will be able to
+    successfully call the refresh endpoint. Defaults to twelve hours. After this
+    re-authorisation will needed. If set to zero an access token will continue to
+    refresh indefinitely
 
 - `request_token_lifetime`
 
@@ -119,7 +127,7 @@ Defines the following attributes;
 
 - `schema`
 
-    A required instance of a [DBIx::Class](https://metacpan.org/pod/DBIx%3A%3AClass) schema object
+    A required instance of [DBIx::Class::Schema](https://metacpan.org/pod/DBIx%3A%3AClass%3A%3ASchema)
 
 - `secret`
 
@@ -134,34 +142,41 @@ Defines the following attributes;
 
 Defines the following methods;
 
-- `access_token`
-
-        $tuple = $self->access_token($context);
-
-    Exchanges a `request_token` for an `access_token`. The returned tuple
-    contains an HTTP status code and a hash reference which forms the body of the
-    response containing the token. Requires `request_token` on
-    `context`.`request`.`body_parameters`
-
 - `authorise`
 
-        $tuple = $self->authorise($context);
+        $response = $self->authorise($context);
 
-    Obtain a `request_token`. The returned tuple contains an HTTP status code and
-    a hash reference which forms the body of the response containing the
-    token. Requires `username` and `password` on
-    `context`.`request`.`body_parameters`. Requires `find_user` and
-    `authenticate` on `context`
+    Obtain a `request_token`. The response contains an HTTP status code and a hash
+    reference which forms the body containing the token. Requires `username` and
+    `password` on `context`.`request`.`body_parameters`. Requires `find_user`
+    and `authenticate` on `context`
+
+- `access_token`
+
+        $response = $self->access_token($context);
+
+    Exchanges a `request_token` for a JWT `access_token`
+
+    The response contains an HTTP status code and a hash reference which forms the
+    body containing the token. Obtains `request_token` from
+    `context`.`request`.`body_parameters`
+
+    The user object returned by `context`.`find_user` is expected to have an
+    `api_claim` method which returns the claim hash reference. The keys/values in
+    the claim hash reference are applied to `context`.`request`.`session` if the
+    session object has attributes of the same name. This will enable
+    `context`.`is_authorised` to obtain user identity information when it is
+    called by the `dispatch` method
 
 - `dispatch`
 
-        $tuple = $self->dispatch($context, @args);
+        $response = $self->dispatch($context, @args);
 
     Obtains `moniker/action` from `context`.`action`. Uses the `moniker` to get
     the API entity and then calls `action` on that object. Requires a valid
     `access_token` on `context`.`request`.`headers`.`Authorization`. Requires
     `is_authorised` on `context`. The `args` are the positional parameters from
-    the request. The first argument should be the version from the request
+    the request. The first argument should be the version from the request path
     (defaults to v1)
 
 - `get_entity`
@@ -173,12 +188,16 @@ Defines the following methods;
 
 - `refresh`
 
-        $tuple = $self->refresh($context);
+        $response = $self->refresh($context);
 
-    Obtains a fresh `access_token`. The returned tuple
-    contains an HTTP status code and a hash reference which forms the body of the
-    response containing the token. Requires a valid `access_token` on
+    Obtains a fresh `access_token`
+
+    The response contains an HTTP status code and a hash reference which forms the
+    body containing the token. Requires a valid `access_token` from
     `context`.`request`.`headers`.`Authorization`
+
+    An `access_token` will only refresh for the `refresh_token_lifetime`, after
+    that re-authorisation will be required
 
 - `routes`
 
