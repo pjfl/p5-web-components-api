@@ -1,7 +1,7 @@
 package Web::Components::API;
 
 use 5.010001;
-use version; our $VERSION = qv( sprintf '0.1.%d', q$Rev: 11 $ =~ /\d+/gmx );
+use version; our $VERSION = qv( sprintf '0.1.%d', q$Rev: 12 $ =~ /\d+/gmx );
 
 use Web::Components::API::Constants
                           qw( EXCEPTION_CLASS FALSE NUL TRUE );
@@ -375,11 +375,16 @@ sub access_token {
    $self->redis_client->del("api_request-${token}");
 
    my $user = $context->find_user({ username => $userid });
+   my $body = { message => "User '${userid}' not found" };
 
-   return [HTTP_UNAUTHORIZED, { message => "User '${userid}' not found" }]
-      unless $user;
+   return [HTTP_UNAUTHORIZED, $body] unless $user;
 
-   return [HTTP_OK, { access_token => $self->_create_access_token($user) }];
+   $token = $self->_create_access_token($user);
+   $body  = { message => "User '${userid}' no api group" };
+
+   return [HTTP_UNAUTHORIZED, $body] unless $token;
+
+   return [HTTP_OK, { access_token => $token }];
 }
 
 =item C<dispatch>
@@ -516,7 +521,9 @@ sub routes {
 sub _create_access_token {
    my ($self, $user) = @_;
 
-   return $self->_encode_access_token($user->api_claim);
+   my $claim = $user->api_claim or return;
+
+   return $self->_encode_access_token($claim);
 }
 
 sub _decode_access_token {

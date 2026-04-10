@@ -1,5 +1,6 @@
 Revision history for Web::Components::API
 
+          - Context claim returns undef for non API users
           - Adds Test::Fixtures
           - Added Artist test class
           - Tests can get a result
