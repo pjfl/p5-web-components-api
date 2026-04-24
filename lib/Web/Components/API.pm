@@ -1,7 +1,7 @@
 package Web::Components::API;
 
 use 5.010001;
-use version; our $VERSION = qv( sprintf '0.1.%d', q$Rev: 12 $ =~ /\d+/gmx );
+use version; our $VERSION = qv( sprintf '0.1.%d', q$Rev: 13 $ =~ /\d+/gmx );
 
 use Web::Components::API::Constants
                           qw( EXCEPTION_CLASS FALSE NUL TRUE );
@@ -307,10 +307,15 @@ Defines the following methods;
 
    $response = $self->authorise($context);
 
-Obtain a C<request_token>. The response contains an HTTP status code and a hash
-reference which forms the body containing the token. Requires C<username> and
-C<password> on C<context>.C<request>.C<body_parameters>. Requires C<find_user>
-and C<authenticate> on C<context>
+Obtain a C<request_token>
+
+The response contains an HTTP status code and a hash reference which forms the
+body containing the token
+
+Requires C<username> and C<password> on
+C<context>.C<request>.C<body_parameters>
+
+Requires C<context>.C<find_user> and C<context>.C<authenticate>
 
 =cut
 
@@ -357,7 +362,7 @@ C<api_claim> method which returns the claim hash reference. The keys/values in
 the claim hash reference are applied to C<context>.C<request>.C<session> if the
 session object has attributes of the same name. This will enable
 C<context>.C<is_authorised> to obtain user identity information when it is
-called by the C<dispatch> method
+called via the C<dispatch> method
 
 =cut
 
@@ -374,15 +379,18 @@ sub access_token {
 
    $self->redis_client->del("api_request-${token}");
 
-   my $user = $context->find_user({ username => $userid });
-   my $body = { message => "User '${userid}' not found" };
+   my $user    = $context->find_user({ username => $userid });
+   my $message = "User '${userid}' not found";
 
-   return [HTTP_UNAUTHORIZED, $body] unless $user;
+   return [HTTP_UNAUTHORIZED, { message => $message }] unless $user;
 
-   $token = $self->_create_access_token($user);
-   $body  = { message => "User '${userid}' no api group" };
+   my $claim = $user->api_claim;
 
-   return [HTTP_UNAUTHORIZED, $body] unless $token;
+   $message = "User '${userid}' no api group";
+
+   return [HTTP_UNAUTHORIZED, { message => $message }] unless $claim;
+
+   $token = $self->_encode_access_token($claim);
 
    return [HTTP_OK, { access_token => $token }];
 }
@@ -391,12 +399,17 @@ sub access_token {
 
    $response = $self->dispatch($context, @args);
 
-Obtains C<moniker/action> from C<context>.C<action>. Uses the C<moniker> to get
-the API entity and then calls C<action> on that object. Requires a valid
-C<access_token> on C<context>.C<request>.C<headers>.C<Authorization>. Requires
-C<is_authorised> on C<context>. The C<args> are the positional parameters from
-the request. The first argument should be the version from the request path
-(defaults to v1)
+Obtains C<moniker/action> from C<context>.C<action>
+
+Uses the C<moniker> to get the API entity and then calls C<action> on that
+object. If the C<action> has multiple versions, calls the appropriate
+versioned method
+
+The C<args> are the positional parameters from the request. The first argument
+should be the version from the request path (defaults to v1)
+
+Requires a valid C<access_token> on
+C<context>.C<request>.C<headers>.C<Authorization>
 
 =cut
 
@@ -404,15 +417,14 @@ sub dispatch {
    my ($self, $context, @args) = @_;
 
    my $version  = shift @args;
-   my $response = $self->_is_throttled($context);
+   my $response = $self->_is_authorised($context);
 
-   return $response if is_error($response->[0]);
-
-   $response = $self->_is_authorised($context);
-
-   return $response if is_error($response->[0]);
+   return $self->_log_error($context, $response) if is_error($response->[0]);
 
    $self->_update_session($context, $response->[1]);
+   $response = $self->_is_throttled($context);
+
+   return $self->_log_error($context, $response) if is_error($response->[0]);
 
    try {
       my ($moniker, $action) = $self->_get_dispatch_args($context);
@@ -477,20 +489,21 @@ sub refresh {
 
    my $elapsed  = time - $response->[1]->{_created};
    my $lifetime = $self->refresh_token_lifetime;
-   my $body     = { message => 'Token too old' };
+   my $too_old  = ($lifetime && $elapsed > $lifetime) ? TRUE : FALSE;
 
-   return [HTTP_UNAUTHORIZED, $body] if $lifetime && $elapsed > $lifetime;
+   return [HTTP_UNAUTHORIZED, { message => 'Token too old' }] if $too_old;
 
-   $body = { access_token => $self->_encode_access_token($response->[1]) };
+   my $token = $self->_encode_access_token($response->[1]);
 
-   return [HTTP_OK, $body];
+   return [HTTP_OK, { access_token => $token }];
 }
 
 =item C<routes>
 
    @routes = $self->routes;
 
-This should be called from within a L<Web::Simple> C<dispatch_request> method.
+This should be called from within a L<Web::Simple> C<dispatch_request> method
+
 Returns a list of pairs of strings. Each pair is a L<Web::Dispatch> route and
 C<moniker/method_chain> used by L<Web::Components> to implement chained
 dispatch
@@ -518,21 +531,13 @@ sub routes {
 }
 
 # Private methods
-sub _create_access_token {
-   my ($self, $user) = @_;
-
-   my $claim = $user->api_claim or return;
-
-   return $self->_encode_access_token($claim);
-}
-
 sub _decode_access_token {
    my ($self, $token) = @_;
 
    my ($salt, $payload, $verify) = split m{ \. }mx, $token;
    my $calculated = $self->_jwt_hash("${salt}${payload}");
 
-   return {} unless $verify eq $calculated;
+   return unless $verify eq $calculated;
 
    return $self->json_parser->decode(decode_base64url($payload));
 }
@@ -591,10 +596,10 @@ sub _handle_errors {
 sub _is_authorised {
    my ($self, $context) = @_;
 
-   my $header = $context->request->header('Authorization');
+   my $header  = $context->request->header('Authorization');
+   my $message = 'No authorization header';
 
-   return [HTTP_BAD_REQUEST, { message => 'No authorization header'}]
-      unless $header;
+   return [HTTP_BAD_REQUEST, { message => $message }] unless $header;
 
    my ($type, $token) = split m{ [ ]+ }mx, $header;
 
@@ -602,13 +607,14 @@ sub _is_authorised {
 
    my $claim = $self->_decode_access_token($token);
 
-   return [HTTP_UNAUTHORIZED, { message => 'Token verification failed'}]
-      unless $claim->{_created};
+   $message = 'Token verification failed';
+
+   return [HTTP_UNAUTHORIZED, { message => $message }] unless $claim;
 
    my $elapsed = time - $claim->{_refreshed};
+   my $too_old = ($elapsed > $self->access_token_lifetime) ? TRUE : FALSE;
 
-   return [HTTP_UNAUTHORIZED, { message => 'Token too old' }]
-      if $elapsed > $self->access_token_lifetime;
+   return [HTTP_UNAUTHORIZED, { message => 'Token too old' }] if $too_old;
 
    return [HTTP_OK, $claim];
 }
@@ -619,17 +625,18 @@ sub _is_throttled {
    my $default = { stamp => 0, count => 0 };
    my $address = $context->request->remote_address;
    my $record  = $self->_request_history->{$address} // $default;
-   my $max_rpm = $self->max_req_per_min;
-   my $body    = { message => "Maximum ${max_rpm} requests per minute" };
+   my $count   = $record->{count} + 1;
+   my $stamp   = $record->{stamp};
    my $now     = time;
 
-   $record->{count} += 1;
+   if ($now - $stamp > 60) { $stamp = $now; $count = 1 }
 
-   $record = { stamp => $now, count => 1 } if $now - $record->{stamp} > 60;
+   $self->_request_history->{$address} = { stamp => $stamp, count => $count };
 
-   $self->_request_history->{$address} = $record;
+   my $max_rpm = $self->max_req_per_min;
+   my $message = "Maximum ${max_rpm} requests per minute";
 
-   return [HTTP_TOO_MANY_REQUESTS, $body] if $record->{count} > $max_rpm;
+   return [HTTP_TOO_MANY_REQUESTS, { message => $message}] if $count > $max_rpm;
 
    return [HTTP_OK];
 }
@@ -640,6 +647,18 @@ sub _jwt_hash {
    my $secret = $self->secret;
 
    return substr digest("${payload}${secret}")->hexdigest, 0, 32;
+}
+
+sub _log_error {
+   my ($self, $context, $response) = @_;
+
+   my $session = $context->session;
+
+   $session->username //= 'Unknown' if $session->can('username');
+
+   $self->log->error($response->[1]->{message}, $context);
+
+   return $response;
 }
 
 sub _update_session {
