@@ -1,7 +1,7 @@
 package Web::Components::API;
 
 use 5.010001;
-use version; our $VERSION = qv( sprintf '0.1.%d', q$Rev: 13 $ =~ /\d+/gmx );
+use version; our $VERSION = qv( sprintf '0.1.%d', q$Rev: 14 $ =~ /\d+/gmx );
 
 use Web::Components::API::Constants
                           qw( EXCEPTION_CLASS FALSE NUL TRUE );
@@ -263,7 +263,8 @@ has 'route_prefix' =>
 
 =item C<schema>
 
-A required instance of L<DBIx::Class::Schema>
+Passed to C<load_components>. It is left for the entity base class to decide
+on the type
 
 =cut
 
@@ -421,7 +422,6 @@ sub dispatch {
 
    return $self->_log_error($context, $response) if is_error($response->[0]);
 
-   $self->_update_session($context, $response->[1]);
    $response = $self->_is_throttled($context);
 
    return $self->_log_error($context, $response) if is_error($response->[0]);
@@ -616,7 +616,9 @@ sub _is_authorised {
 
    return [HTTP_UNAUTHORIZED, { message => 'Token too old' }] if $too_old;
 
-   return [HTTP_OK, $claim];
+   $self->_update_session($context, $claim);
+
+   return [HTTP_OK];
 }
 
 sub _is_throttled {

@@ -56,7 +56,7 @@ Defines the following attributes;
 
 =item C<application>
 
-An immutable weak reference to the L<Web::Components::API> object. Required
+An immutable weak reference to the L<API|Web::Components::API> object. Required
 
 =cut
 
@@ -64,7 +64,8 @@ has 'application' => is => 'ro', required => TRUE, weak_ref => TRUE;
 
 =item C<column_list>
 
-The list of L<Web::Components::API::Column> objects declared for this entity
+The list of L<column|Web::Components::API::Column> objects declared for this
+entity
 
 =cut
 
@@ -136,7 +137,8 @@ has 'max_page_size' => is => 'ro', isa => Int, default => 200;
 
 =item C<method_list>
 
-The list of L<Web::Components::API::Method> objects declared for this entity
+The list of L<API method|Web::Components::API::Method> objects declared for
+this entity
 
 =cut
 
@@ -147,7 +149,7 @@ has 'method_list' =>
 
 =item C<schema>
 
-A required instance of a L<DBIx::Class> schema object
+A required instance of a L<schema|DBIx::Class::Schema> object
 
 =cut
 
@@ -158,7 +160,7 @@ has 'schema' =>
 
 =item C<result_class>
 
-Required L<DBIx::Class> result class name. See C<resultset>
+Required L<result|DBIx::Class::Core> class name. See C<resultset>
 
 =cut
 
@@ -166,8 +168,9 @@ has 'result_class' => is => 'ro', isa => Str, required => TRUE;
 
 =item C<resultset>
 
-Derived from the C<schema> and C<result_class>. The C<resultset> object is
-expected to implement the method C<find_by_key>
+Derived from the C<schema> and C<result_class>. The
+L<resultset|DBIx::Class::ResultSet> object is expected to implement the method
+C<find_by_key>
 
 =cut
 
@@ -190,8 +193,19 @@ Defines the following methods;
 
 =item C<content_arguments>
 
-Class method. Add these to a methods C<in_args> to include the query parameters
-that they define; C<include>
+Class method. Add these to a method's C<in_args> to include the query
+parameters that they define
+
+Content query parameters;
+
+=over 3
+
+=item C<include>
+
+Setting C<include> to a DBIC relation name will include the related results
+in the response
+
+=back
 
 =cut
 
@@ -209,8 +223,26 @@ sub content_arguments {
 
 =item C<pagination_arguments>
 
-Class method. Add these to a methods C<in_args> to include the query parameters
-that they define; C<page>, C<page_size>, and C<sort_by>
+Class method. Add these to a method's C<in_args> to include the query
+parameters that they define
+
+Pagination query parameters;
+
+=over 3
+
+=item C<page>
+
+Which page of results to return
+
+=item C<page_size>
+
+Number of results returned with each response
+
+=item C<sort_by>
+
+Sort the results in the response by this column. Can be C<asc> or C<desc>
+
+=back
 
 =cut
 
@@ -230,7 +262,7 @@ sub pagination_arguments {
 
    $tuple = $self->create($context);
 
-Creates a new persisted L<DBIx::Class> result object. Expects
+Creates a new persisted L<result|DBIx::Class::Core> object. Expects
 C<context>.C<request>.C<body_parameters> to contain the attributes and
 values used to create to object. Returns a tuple containing HTTP status
 code, response body, and the ID of the newly created object
