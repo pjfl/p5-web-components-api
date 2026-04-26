@@ -1,7 +1,7 @@
 package Web::Components::API;
 
 use 5.010001;
-use version; our $VERSION = qv( sprintf '0.1.%d', q$Rev: 14 $ =~ /\d+/gmx );
+use version; our $VERSION = qv( sprintf '0.1.%d', q$Rev: 15 $ =~ /\d+/gmx );
 
 use Web::Components::API::Constants
                           qw( EXCEPTION_CLASS FALSE NUL TRUE );
@@ -656,7 +656,8 @@ sub _log_error {
 
    my $session = $context->session;
 
-   $session->username //= 'Unknown' if $session->can('username');
+   $session->username('Unknown')
+      if $session->can('username') && !$session->username;
 
    $self->log->error($response->[1]->{message}, $context);
 
